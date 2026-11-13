@@ -116,6 +116,18 @@
       color: var(--text); border-radius: 6px; padding: 3px 8px; font-size: 0.75rem; cursor: pointer;
     }
     .fselect:focus { outline: none; border-color: var(--accent); }
+    .proc-filter { position: relative; }
+    .proc-panel {
+      position: absolute; top: calc(100% + 4px); left: 0; z-index: 1000;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px; width: 320px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .proc-panel-actions { display: flex; gap: 6px; margin: 6px 0; }
+    .proc-panel input[type=text] { width: 100%; }
+    .proc-list { max-height: 320px; overflow-y: auto; font-size: 0.75rem; }
+    .proc-list label { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 4px; cursor: pointer; color: var(--text); }
+    .proc-list label:hover { background: var(--surface2); }
+    .proc-list .proc-count { margin-left: auto; color: var(--muted); }
 
     /* ── METRIC CARDS ── */
     .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
@@ -235,6 +247,19 @@
       <select class="fselect" id="filter-run" onchange="updateAll()">
         <option value="">All runs</option>
       </select>
+      <div class="filter-sep"></div>
+      <span class="filter-label">Processes</span>
+      <div class="proc-filter" id="proc-filter">
+        <button class="fselect" id="proc-filter-btn" onclick="toggleProcPanel(event)">All processes ▾</button>
+        <div class="proc-panel" id="proc-panel" style="display:none">
+          <input type="text" class="fselect" id="proc-search" placeholder="Search processes…" oninput="renderProcList()">
+          <div class="proc-panel-actions">
+            <button class="fbtn" onclick="setAllProcs(true)">Select all</button>
+            <button class="fbtn" onclick="setAllProcs(false)">Select none</button>
+          </div>
+          <div class="proc-list" id="proc-list"></div>
+        </div>
+      </div>
     </div>
 
     <!-- METRICS ROW -->
@@ -533,6 +558,7 @@ function sampleColor(s) {
 const state = {
   runs: [],            // [{id, name, tasks}]
   activeStatuses: new Set(['COMPLETED','FAILED','CACHED']),
+  excludedProcs:  new Set(),   // procShort names unchecked in the Processes filter
   activeTab: 'concurrent',
   sortKey: 'cpuHours',
   sortDir: -1,
@@ -677,6 +703,8 @@ function onDataLoaded() {
   rf.innerHTML = '<option value="">All runs</option>' +
     state.runs.map(r => `<option value="${r.id}"${String(r.id)===curR?' selected':''}>${r.name}</option>`).join('');
 
+  renderProcList();
+
   // header chips
   const chips = document.getElementById('run-chips');
   chips.innerHTML = state.runs.map((r,i) => {
@@ -722,8 +750,65 @@ function isRealSample(sampleId) {
   return true;
 }
 
+// Process filter: tracks *excluded* names so processes from newly loaded runs start checked.
+// Applied unconditionally in getTasks, so it affects every chart, table and metric.
+function allProcCounts() {
+  const counts = new Map();
+  state.runs.forEach(r => r.tasks.forEach(t => {
+    if (isRealSample(t.sampleId)) counts.set(t.procShort, (counts.get(t.procShort) || 0) + 1);
+  }));
+  return counts;
+}
+
+function renderProcList() {
+  const counts = allProcCounts();
+  const names = [...counts.keys()].sort();
+  const q = document.getElementById('proc-search').value.trim().toLowerCase();
+  const esc = s => s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  document.getElementById('proc-list').innerHTML = names
+    .filter(n => !q || n.toLowerCase().includes(q))
+    .map(n => `<label><input type="checkbox" data-proc="${esc(n)}"${state.excludedProcs.has(n) ? '' : ' checked'}
+      onchange="toggleProc(this)"> ${esc(n)}<span class="proc-count">${counts.get(n)}</span></label>`)
+    .join('') || '<div style="color:var(--muted);padding:4px">No matching processes</div>';
+
+  const nOff = names.filter(n => state.excludedProcs.has(n)).length;
+  document.getElementById('proc-filter-btn').textContent =
+    (nOff === 0 ? 'All processes' : `${names.length - nOff} of ${names.length} processes`) + ' ▾';
+  document.getElementById('proc-filter-btn').style.borderColor = nOff ? 'var(--accent)' : '';
+}
+
+function toggleProc(cb) {
+  if (cb.checked) state.excludedProcs.delete(cb.dataset.proc);
+  else state.excludedProcs.add(cb.dataset.proc);
+  renderProcList();
+  updateAll();
+}
+
+// Applies to the processes currently visible in the list (respects the search box).
+function setAllProcs(on) {
+  document.querySelectorAll('#proc-list input[type=checkbox]').forEach(cb => {
+    if (on) state.excludedProcs.delete(cb.dataset.proc);
+    else state.excludedProcs.add(cb.dataset.proc);
+  });
+  renderProcList();
+  updateAll();
+}
+
+function toggleProcPanel(e) {
+  e.stopPropagation();
+  const p = document.getElementById('proc-panel');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+  if (p.style.display === '') document.getElementById('proc-search').focus();
+}
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('proc-filter').contains(e.target))
+    document.getElementById('proc-panel').style.display = 'none';
+});
+
 function getTasks({ ignoreStatus=false, ignoreSample=false, ignoreRun=false }={}) {
   let tasks = state.runs.flatMap(r => r.tasks).filter(t => isRealSample(t.sampleId));
+  if (state.excludedProcs.size) tasks = tasks.filter(t => !state.excludedProcs.has(t.procShort));
   if (!ignoreStatus) tasks = tasks.filter(t => state.activeStatuses.has(t.status));
   if (!ignoreSample) {
     const s = document.getElementById('filter-sample').value;

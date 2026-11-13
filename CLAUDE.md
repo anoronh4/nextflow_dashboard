@@ -50,7 +50,9 @@ explicit re-render calls.
    `onDataLoaded` (627) repopulates the sample/run dropdowns and run chips and reveals `#dashboard`.
 3. **Filter** — every renderer starts from `getTasks({ignoreStatus, ignoreSample, ignoreRun})`
    (688), which reads the filter DOM controls directly (they are the source of truth, not `state`)
-   and drops non-sample tags via `isRealSample`.
+   and drops non-sample tags via `isRealSample`. The Processes multi-select is the exception: it
+   lives in `state.excludedProcs` (a set of *unchecked* `procShort` names, so newly loaded
+   processes default to on) and is applied unconditionally — no `ignore*` flag bypasses it.
 4. **Render** — `updateAll()` (714) → `renderMetrics()` + `renderActiveTab()` (719), a plain
    if/else dispatch on `state.activeTab` to one `renderX()` per tab. Charts go through
    `Plotly.react(div, traces, layout, {responsive:true})`; empty results call `Plotly.purge` and
