@@ -336,6 +336,7 @@
                   <th onclick="sortBy('cached')">Cached <span class="sort-arrow" id="arr-cached">↕</span></th>
                   <th onclick="sortBy('cpuHours')">CPU-hrs <span class="sort-arrow active" id="arr-cpuHours">↓</span></th>
                   <th onclick="sortBy('wallHours')">Wall-hrs <span class="sort-arrow" id="arr-wallHours">↕</span></th>
+                  <th onclick="sortBy('totalCpus')">Total CPUs (alloc) <span class="sort-arrow" id="arr-totalCpus">↕</span></th>
                   <th onclick="sortBy('maxCpus')">Peak CPUs <span class="sort-arrow" id="arr-maxCpus">↕</span></th>
                   <th onclick="sortBy('peakRss')">Peak RAM <span class="sort-arrow" id="arr-peakRss">↕</span></th>
                 </tr>
@@ -351,7 +352,27 @@
       <div class="chart-panel">
         <div class="chart-header">
           <div class="chart-title">Process Duration Distribution</div>
-          <div class="chart-desc">Box plots of actual runtime (realtime) per process, sorted by median. Top 25 shown. Hover for details.</div>
+          <div class="chart-desc" id="proc-desc">Box plots of actual runtime (realtime) per process. Top 25 shown. Hover for details.</div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;align-items:center;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);">
+              <span>Order:</span>
+              <button id="proc-sort-median" onclick="setProcSort('median')"
+                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
+                By median</button>
+              <button id="proc-sort-alpha" onclick="setProcSort('alpha')"
+                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
+                A → Z</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);">
+              <span>Color:</span>
+              <button id="proc-color-median" onclick="setProcColor('median')"
+                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
+                By median</button>
+              <button id="proc-color-alpha" onclick="setProcColor('alpha')"
+                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
+                A → Z</button>
+            </div>
+          </div>
         </div>
         <div class="chart-body">
           <div id="chart-process" style="height:500px;"></div>
@@ -403,6 +424,17 @@
 
     <div id="pane-typical" class="tab-pane" style="display:none">
 
+      <!-- written metric toggle -->
+      <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
+        <span>Written data source:</span>
+        <button id="wb-btn-write_bytes" onclick="setWrittenMetric('write_bytes')"
+          style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
+          write_bytes</button>
+        <button id="wb-btn-wchar" onclick="setWrittenMetric('wchar')"
+          style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
+          wchar</button>
+        <span style="font-size:0.75rem;color:var(--muted);margin-left:4px;" id="wb-hint"></span>
+      </div>
       <!-- summary cards -->
       <div class="metric-grid" id="typical-cards" style="margin-bottom:14px;"></div>
 
@@ -438,6 +470,7 @@
                   <th onclick="sortTypical('run')">Run <span class="sort-arrow" id="tarr-run">↕</span></th>
                   <th onclick="sortTypical('cpuH')">CPU-hrs <span class="sort-arrow active" id="tarr-cpuH">↓</span></th>
                   <th onclick="sortTypical('wallH')">Wall-hrs <span class="sort-arrow" id="tarr-wallH">↕</span></th>
+                  <th onclick="sortTypical('totalAllocCpus')">Total CPUs (alloc) <span class="sort-arrow" id="tarr-totalAllocCpus">↕</span></th>
                   <th onclick="sortTypical('peakCpu')">Peak Conc. CPUs <span class="sort-arrow" id="tarr-peakCpu">↕</span></th>
                   <th onclick="sortTypical('peakAllocMemGB')">Peak Conc. RAM (alloc) <span class="sort-arrow" id="tarr-peakAllocMemGB">↕</span></th>
                   <th onclick="sortTypical('peakRssGB')">Peak RSS / task <span class="sort-arrow" id="tarr-peakRssGB">↕</span></th>
@@ -502,7 +535,10 @@ const state = {
   activeStatuses: new Set(['COMPLETED','FAILED','CACHED']),
   activeTab: 'concurrent',
   sortKey: 'cpuHours',
-  sortDir: -1
+  sortDir: -1,
+  procSortOrder:   'median',  // 'median' | 'alpha'
+  procColorOrder:  'median',  // 'median' | 'alpha'
+  writtenMetric:   'write_bytes', // 'write_bytes' | 'wchar'
 };
 
 // ═══════════════════════════════════════════════
@@ -596,6 +632,7 @@ function parseTrace(text, runName, runId) {
       cpuPct:     parseFloat((get(c,'%cpu')||'0').replace('%','')) || 0,
       cpuMs:      (realtimeMs && cpus) ? realtimeMs * cpus : null,
       wbytes:     parseMemB(get(c,'write_bytes')) ?? (parseFloat(get(c,'write_bytes')) || null),
+      wcharBytes: parseMemB(get(c,'wchar'))        ?? (parseFloat(get(c,'wchar'))        || null),
     };
   });
 }
@@ -1210,7 +1247,7 @@ function renderTable() {
     if (!map[key]) map[key] = {
       sample:t.sampleId, run:t.runName,
       jobs:0, completed:0, failed:0, cached:0,
-      cpuMs:0, maxCpus:0, peakRss:0,
+      cpuMs:0, totalCpus:0, maxCpus:0, peakRss:0,
       starts:[], ends:[]
     };
     const r = map[key];
@@ -1219,6 +1256,7 @@ function renderTable() {
     else if (t.status==='FAILED') r.failed++;
     else if (t.status==='CACHED') r.cached++;
     if (t.cpuMs) r.cpuMs += t.cpuMs;
+    if (t.cpus)  r.totalCpus += t.cpus;
     if (t.cpus > r.maxCpus) r.maxCpus = t.cpus;
     if (t.peakRss && t.peakRss > r.peakRss) r.peakRss = t.peakRss;
     if (t.start)    r.starts.push(t.start.getTime());
@@ -1249,6 +1287,7 @@ function renderTable() {
       <td><span class="sbadge sbadge-cache">${r.cached}</span></td>
       <td style="font-variant-numeric:tabular-nums">${r.cpuHours>0?r.cpuHours.toFixed(2):'—'}</td>
       <td style="font-variant-numeric:tabular-nums">${r.wallHours>0?r.wallHours.toFixed(2):'—'}</td>
+      <td>${r.totalCpus}</td>
       <td>${r.maxCpus}</td>
       <td>${fmtBytes(r.peakRss)}</td>
     </tr>`;
@@ -1258,6 +1297,22 @@ function renderTable() {
 // ═══════════════════════════════════════════════
 // CHART 4: PROCESS DURATION BOX PLOTS
 // ═══════════════════════════════════════════════
+function setProcSort(order) {
+  state.procSortOrder = order;
+  document.getElementById('proc-sort-median').style.background = order === 'median' ? '#1f6feb' : '#21262d';
+  document.getElementById('proc-sort-median').style.color      = order === 'median' ? '#fff'    : '#c9d1d9';
+  document.getElementById('proc-sort-alpha').style.background  = order === 'alpha'  ? '#1f6feb' : '#21262d';
+  document.getElementById('proc-sort-alpha').style.color       = order === 'alpha'  ? '#fff'    : '#c9d1d9';
+  renderProcess();
+}
+function setProcColor(order) {
+  state.procColorOrder = order;
+  document.getElementById('proc-color-median').style.background = order === 'median' ? '#1f6feb' : '#21262d';
+  document.getElementById('proc-color-median').style.color      = order === 'median' ? '#fff'    : '#c9d1d9';
+  document.getElementById('proc-color-alpha').style.background  = order === 'alpha'  ? '#1f6feb' : '#21262d';
+  document.getElementById('proc-color-alpha').style.color       = order === 'alpha'  ? '#fff'    : '#c9d1d9';
+  renderProcess();
+}
 function renderProcess() {
   const div = document.getElementById('chart-process');
   const tasks = getTasks().filter(t => t.realtimeMs);
@@ -1274,24 +1329,38 @@ function renderProcess() {
     byProc[t.procShort].push(t.realtimeMs / 60000); // minutes
   });
 
-  const sorted = Object.entries(byProc)
+  const entries = Object.entries(byProc)
     .map(([name, vals]) => {
       vals.sort((a,b)=>a-b);
       return { name, vals, med: vals[Math.floor(vals.length/2)] };
-    })
-    .sort((a,b) => b.med - a.med)
-    .slice(0, 25);
+    });
 
-  const traces = sorted.map(({name,vals},i) => ({
-    type: 'box', name,
-    y: vals,
-    boxpoints: vals.length <= 30 ? 'all' : 'outliers',
-    jitter: 0.35, pointpos: 0,
-    marker: { color: PALETTE[i % PALETTE.length], size: 4, opacity: 0.7 },
-    line: { color: PALETTE[i % PALETTE.length] },
-    fillcolor: PALETTE[i % PALETTE.length] + '40',
-    hovertemplate: `<b>${name}</b><br>%{y:.2f} min<extra></extra>`,
-  }));
+  // Sort order
+  const sorted = (state.procSortOrder === 'alpha'
+    ? entries.slice().sort((a,b) => a.name.localeCompare(b.name))
+    : entries.slice().sort((a,b) => b.med - a.med)
+  ).slice(0, 25);
+
+  // Color index: either by position-in-sorted-list, or by alphabetical rank across ALL processes
+  const allNamesAlpha = entries.map(e => e.name).sort((a,b) => a.localeCompare(b));
+  const colorIdxFor = name => state.procColorOrder === 'alpha'
+    ? allNamesAlpha.indexOf(name)
+    : sorted.findIndex(e => e.name === name);
+
+  const traces = sorted.map(({name, vals}) => {
+    const ci = colorIdxFor(name);
+    const col = PALETTE[ci % PALETTE.length];
+    return {
+      type: 'box', name,
+      y: vals,
+      boxpoints: vals.length <= 30 ? 'all' : 'outliers',
+      jitter: 0.35, pointpos: 0,
+      marker: { color: col, size: 4, opacity: 0.7 },
+      line: { color: col },
+      fillcolor: col + '40',
+      hovertemplate: `<b>${name}</b><br>%{y:.2f} min<extra></extra>`,
+    };
+  });
 
   Plotly.react(div, traces, {
     paper_bgcolor:'transparent', plot_bgcolor:'transparent',
@@ -1364,13 +1433,17 @@ function computeSampleStats() {
     memEvs.forEach(([,d]) => { curMem += d; peakAllocMem = Math.max(peakAllocMem, curMem); });
     const peakAllocMemGB = peakAllocMem > 0 ? peakAllocMem / 1073741824 : null;
 
-    // Total written bytes
-    const writtenGB = ts.reduce((s, t) => s + (t.wbytes || 0), 0) / 1073741824;
+    // Total written bytes (both metrics)
+    const writtenGB  = ts.reduce((s, t) => s + (t.wbytes     || 0), 0) / 1073741824;
+    const wcharGB    = ts.reduce((s, t) => s + (t.wcharBytes || 0), 0) / 1073741824;
 
-    return { sample, run, cpuH, wallH, peakCpu,
+    const totalAllocCpus = ts.reduce((s, t) => s + (t.cpus || 0), 0);
+
+    return { sample, run, cpuH, wallH, totalAllocCpus, peakCpu,
              peakRssGB: peakRssGB > 0 ? peakRssGB : null,
              peakAllocMemGB,
-             writtenGB: writtenGB > 0 ? writtenGB : null,
+             writtenGB:  writtenGB > 0 ? writtenGB : null,
+             wcharGB:    wcharGB   > 0 ? wcharGB   : null,
              nTasks: ts.length };
   });
 }
@@ -1622,15 +1695,15 @@ function downloadTypicalTSV() {
 
   const headers = [
     'sample', 'run', 'cpu_hours', 'wall_hours',
-    'peak_conc_cpus', 'peak_conc_ram_alloc_gb', 'peak_rss_task_gb',
-    'written_gb', 'n_tasks'
+    'total_alloc_cpus', 'peak_conc_cpus', 'peak_conc_ram_alloc_gb', 'peak_rss_task_gb',
+    'written_gb_write_bytes', 'written_gb_wchar', 'n_tasks'
   ];
   const fmt = v => v == null ? '' : (typeof v === 'number' ? v.toFixed(4) : v);
   const rows = stats.map(r => [
     r.sample, r.run,
     fmt(r.cpuH), fmt(r.wallH),
-    r.peakCpu, fmt(r.peakAllocMemGB), fmt(r.peakRssGB),
-    fmt(r.writtenGB), r.nTasks
+    r.totalAllocCpus, r.peakCpu, fmt(r.peakAllocMemGB), fmt(r.peakRssGB),
+    fmt(r.writtenGB), fmt(r.wcharGB), r.nTasks
   ].join('\t'));
 
   const tsv = [headers.join('\t'), ...rows].join('\n');
@@ -1657,15 +1730,29 @@ function renderTypicalTable(stats) {
       <td style="color:var(--muted)">${r.run}</td>
       <td style="font-variant-numeric:tabular-nums">${r.cpuH.toFixed(2)}</td>
       <td style="font-variant-numeric:tabular-nums">${r.wallH != null ? r.wallH.toFixed(2) : '—'}</td>
+      <td>${r.totalAllocCpus}</td>
       <td>${r.peakCpu}</td>
       <td>${r.peakAllocMemGB != null ? r.peakAllocMemGB.toFixed(1) + ' GB' : '—'}</td>
       <td>${r.peakRssGB != null ? r.peakRssGB.toFixed(1) + ' GB' : '—'}</td>
-      <td style="font-variant-numeric:tabular-nums">${r.writtenGB != null ? r.writtenGB.toFixed(1) : '—'}</td>
+      <td style="font-variant-numeric:tabular-nums">${(state.writtenMetric === 'wchar' ? r.wcharGB : r.writtenGB) != null ? (state.writtenMetric === 'wchar' ? r.wcharGB : r.writtenGB).toFixed(1) : '—'}</td>
       <td>${r.nTasks}</td>
     </tr>`;
   }).join('');
 }
 
+function setWrittenMetric(metric) {
+  state.writtenMetric = metric;
+  document.getElementById('wb-btn-write_bytes').style.background = metric === 'write_bytes' ? '#1f6feb' : '#21262d';
+  document.getElementById('wb-btn-write_bytes').style.color      = metric === 'write_bytes' ? '#fff'    : '#c9d1d9';
+  document.getElementById('wb-btn-wchar').style.background       = metric === 'wchar'       ? '#1f6feb' : '#21262d';
+  document.getElementById('wb-btn-wchar').style.color            = metric === 'wchar'       ? '#fff'    : '#c9d1d9';
+  const hints = {
+    'write_bytes': 'actual bytes flushed to disk',
+    'wchar':       'all bytes passed to write() — includes pipes & temp files',
+  };
+  document.getElementById('wb-hint').textContent = '(' + hints[metric] + ')';
+  renderTypicalSample();
+}
 function renderTypicalSample() {
   const stats = computeSampleStats();
   _cachedTypicalStats = stats;
@@ -1679,13 +1766,15 @@ function renderTypicalSample() {
   // ── Medians ──
   const cpuVals  = stats.map(s => s.cpuH).filter(v => v > 0);
   const wallVals = stats.map(s => s.wallH).filter(v => v != null);
+  const tcVals   = stats.map(s => s.totalAllocCpus).filter(v => v > 0);
   const cpkVals  = stats.map(s => s.peakCpu).filter(v => v > 0);
   const memVals  = stats.map(s => s.peakRssGB).filter(v => v != null);
   const paVals   = stats.map(s => s.peakAllocMemGB).filter(v => v != null);
-  const wbVals   = stats.map(s => s.writtenGB).filter(v => v != null);
+  const wbVals   = stats.map(s => state.writtenMetric === 'wchar' ? s.wcharGB : s.writtenGB).filter(v => v != null);
 
   const mCpu   = arrMedian(cpuVals);
   const mWall  = arrMedian(wallVals);
+  const mTc    = arrMedian(tcVals);
   const mCpk   = arrMedian(cpkVals);
   const mMem   = arrMedian(memVals);
   const mPa    = arrMedian(paVals);
@@ -1693,6 +1782,7 @@ function renderTypicalSample() {
 
   const q1Cpu  = arrQuantile(cpuVals,  0.25), q3Cpu  = arrQuantile(cpuVals,  0.75);
   const q1Wall = arrQuantile(wallVals, 0.25), q3Wall = arrQuantile(wallVals, 0.75);
+  const q1Tc   = arrQuantile(tcVals,   0.25), q3Tc   = arrQuantile(tcVals,   0.75);
   const q1Cpk  = arrQuantile(cpkVals,  0.25), q3Cpk  = arrQuantile(cpkVals,  0.75);
   const q1Mem  = arrQuantile(memVals,  0.25), q3Mem  = arrQuantile(memVals,  0.75);
   const q1Pa   = arrQuantile(paVals,   0.25), q3Pa   = arrQuantile(paVals,   0.75);
@@ -1712,6 +1802,11 @@ function renderTypicalSample() {
       <div class="metric-label">Walltime (median)</div>
       <div class="metric-value">${fmt1(mWall)} h</div>
       <div class="metric-sub">Q1 ${fmt1(q1Wall)} · Q3 ${fmt1(q3Wall)} h</div>
+    </div>
+    <div class="metric-card" style="border-color:#30363d">
+      <div class="metric-label">Total CPUs allocated (median)</div>
+      <div class="metric-value">${fmt0(mTc)}</div>
+      <div class="metric-sub">Q1 ${fmt1(q1Tc)} · Q3 ${fmt1(q3Tc)}</div>
     </div>
     <div class="metric-card accent-yellow">
       <div class="metric-label">Peak Conc. CPUs (alloc, median)</div>
@@ -1745,10 +1840,10 @@ function renderTypicalSample() {
   const scatterTrace = {
     type: 'scatter', mode: 'markers',
     x: stats.map(s => s.cpuH),
-    y: stats.map(s => s.writtenGB ?? 0),
+    y: stats.map(s => (state.writtenMetric === 'wchar' ? s.wcharGB : s.writtenGB) ?? 0),
     text: stats.map(s =>
       `<b>${s.sample}</b><br>Run: ${s.run}<br>CPU-hrs: ${s.cpuH.toFixed(2)}<br>` +
-      `Written: ${s.writtenGB != null ? s.writtenGB.toFixed(1) + ' GB' : '—'}<br>` +
+      `Written (${state.writtenMetric === 'wchar' ? 'wchar' : 'write_bytes'}): ${(state.writtenMetric === 'wchar' ? s.wcharGB : s.writtenGB) != null ? (state.writtenMetric === 'wchar' ? s.wcharGB : s.writtenGB).toFixed(1) + ' GB' : '—'}<br>` +
       `Peak Conc. RAM (alloc): ${s.peakAllocMemGB != null ? s.peakAllocMemGB.toFixed(1) + ' GB' : '—'}<br>` +
       `Peak RSS / task: ${s.peakRssGB != null ? s.peakRssGB.toFixed(1) + ' GB' : '—'}<br>` +
       `Wall: ${s.wallH != null ? s.wallH.toFixed(2) + ' h' : '—'}<br>` +
