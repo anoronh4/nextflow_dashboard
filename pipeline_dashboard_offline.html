@@ -552,6 +552,23 @@ const PALETTE = [
   '#b08800','#0d419d','#1a7f37','#b62324','#553098','#7d4e00','#388bfd','#4ac26b','#ff7b72',
   '#a371f7','#d4a72c','#0969da'
 ];
+// Process colors (Job Timeline, Process Durations). Ordered by farthest-point selection in OKLab:
+// any k-prefix is as spread out as possible, and every pair within the first 10 is ΔE ≥ 15
+// (clearly distinct to normal vision) with ≥ 3:1 contrast on the dark surface.
+// Slots 11–16 are progressively closer; beyond 16 colors repeat (legend + hover still identify).
+const PROC_PALETTE = [
+  '#669bf1','#cc2a1b','#85c814','#25855b','#fe7fc0','#a23db8','#f99603','#4dc8ba','#a97e2c','#4761e4',
+  '#b96989','#c171f6','#ff5e4a','#177ba8','#c19fe9','#7dab64',
+];
+// Color follows the process, ranked A→Z among the processes checked in the Processes filter —
+// so narrowing the filter to a handful gives them the most distinct slots, and a process keeps
+// its color across tabs and across status/sample/run filtering.
+function processColor(name) {
+  const names = [...allProcCounts().keys()].filter(n => !state.excludedProcs.has(n)).sort();
+  const i = names.indexOf(name);
+  return PROC_PALETTE[(i < 0 ? 0 : i) % PROC_PALETTE.length];
+}
+
 const sampleColorMap = {};
 let colorIdx = 0;
 function sampleColor(s) {
@@ -1388,10 +1405,10 @@ function renderGantt() {
     procMap[t.procShort].text.push(tip,        tip,         '');
   });
 
-  const traces = allProcs.map((proc, i) => {
+  const traces = allProcs.map(proc => {
     const d = procMap[proc];
     if (!d) return null;
-    const color = PALETTE[i % PALETTE.length];
+    const color = processColor(proc);
     return {
       type: 'scatter',
       mode: 'lines',
@@ -1561,15 +1578,13 @@ function renderProcess() {
     : entries.slice().sort((a,b) => b.med - a.med)
   ).slice(0, 25);
 
-  // Color index: either by position-in-sorted-list, or by alphabetical rank across ALL processes
-  const allNamesAlpha = entries.map(e => e.name).sort((a,b) => a.localeCompare(b));
-  const colorIdxFor = name => state.procColorOrder === 'alpha'
-    ? allNamesAlpha.indexOf(name)
-    : sorted.findIndex(e => e.name === name);
+  // Color: by position in the median-sorted list, or the shared per-process color (A→Z, matches Job Timeline)
+  const colorFor = name => state.procColorOrder === 'alpha'
+    ? processColor(name)
+    : PROC_PALETTE[sorted.findIndex(e => e.name === name) % PROC_PALETTE.length];
 
   const traces = sorted.map(({name, vals}) => {
-    const ci = colorIdxFor(name);
-    const col = PALETTE[ci % PALETTE.length];
+    const col = colorFor(name);
     return {
       type: 'box', name,
       y: vals,

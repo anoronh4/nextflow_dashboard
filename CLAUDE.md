@@ -93,7 +93,10 @@ visibility from `data-tab` → `#pane-<tab>`, so the id must match exactly.
   (`renderCpuEff` 1395, `renderMemEff` 1507) pair them as dim/bright bars sorted worst-ratio-first.
   Keep that dim-allocated / bright-actual visual language when touching them.
 - **Colors**: `sampleColor(s)` (492) assigns palette entries from `PALETTE` on first use and
-  memoizes in `sampleColorMap`, so a sample keeps its color across tabs. Fills append an alpha
+  memoizes in `sampleColorMap`, so a sample keeps its color across tabs. Processes use a separate
+  `PROC_PALETTE` via `processColor(name)` (A→Z rank among processes checked in the Processes
+  filter), shared by Job Timeline and Process Durations. Its order is farthest-point in OKLab —
+  don't reorder or append by eye; re-check with the dataviz skill's `validate_palette.js --pairs all`. Fills append an alpha
   suffix to the hex (`+ 'b0'`).
 - Tables render by string-building `innerHTML`; sort handlers (`sortBy` 1192, `sortTypical` 1381)
   flip a module-level dir flag, update the `.sort-arrow` span, and re-render.
