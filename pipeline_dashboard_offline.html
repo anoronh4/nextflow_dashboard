@@ -252,6 +252,9 @@
         <option value="">All runs</option>
       </select>
       <div class="filter-sep"></div>
+      <button class="fbtn" id="btn-anon" onclick="toggleAnonymize()"
+        title="Replace sample IDs and run names with Sample 001 / Run 1 in every chart, table and download">🕶 Anonymize IDs</button>
+      <div class="filter-sep"></div>
       <span class="filter-label">Processes</span>
       <div class="proc-filter" id="proc-filter">
         <button class="fselect" id="proc-filter-btn" onclick="toggleProcPanel(event)">All processes ▾</button>
@@ -552,6 +555,7 @@ const PALETTE = [
 const sampleColorMap = {};
 let colorIdx = 0;
 function sampleColor(s) {
+  s = aliasToSample.get(s) ?? s;  // anonymized labels share the real sample's color
   if (!sampleColorMap[s]) { sampleColorMap[s] = PALETTE[colorIdx++ % PALETTE.length]; }
   return sampleColorMap[s];
 }
@@ -670,6 +674,7 @@ function exportPlot(gd, theme) {
 const state = {
   runs: [],            // [{id, name, tasks}]
   activeStatuses: new Set(['COMPLETED','FAILED','CACHED']),
+  anonymize:      false,       // show Sample 001 / Run 1 aliases instead of real IDs
   excludedProcs:  new Set(),   // procShort names unchecked in the Processes filter
   activeTab: 'concurrent',
   sortKey: 'cpuHours',
@@ -800,31 +805,9 @@ function handleFiles(files) {
 }
 
 function onDataLoaded() {
-  const allTasks = state.runs.flatMap(r => r.tasks);
-
-  // populate sample filter (sorted, unique — exclude reference/non-sample tags)
-  const samples = [...new Set(allTasks.filter(t => isRealSample(t.sampleId)).map(t => t.sampleId))].sort();
-  const sf = document.getElementById('filter-sample');
-  const curS = sf.value;
-  sf.innerHTML = '<option value="">All samples</option>' +
-    samples.map(s => `<option value="${s}"${s===curS?' selected':''}>${s}</option>`).join('');
-
-  // populate run filter
-  const rf = document.getElementById('filter-run');
-  const curR = rf.value;
-  rf.innerHTML = '<option value="">All runs</option>' +
-    state.runs.map(r => `<option value="${r.id}"${String(r.id)===curR?' selected':''}>${r.name}</option>`).join('');
-
+  assignAliases();
+  renderIdLabels();
   renderProcList();
-
-  // header chips
-  const chips = document.getElementById('run-chips');
-  chips.innerHTML = state.runs.map((r,i) => {
-    const c = PALETTE[i % PALETTE.length];
-    return `<div class="run-chip" style="background:${c}1a;border-color:${c};color:${c}">
-      <span class="chip-dot" style="background:${c}"></span>${r.name}
-    </div>`;
-  }).join('');
 
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('dashboard').style.display = '';
@@ -918,6 +901,55 @@ document.addEventListener('click', e => {
     document.getElementById('proc-panel').style.display = 'none';
 });
 
+// ═══════════════════════════════════════════════
+// ANONYMIZATION
+// ═══════════════════════════════════════════════
+// Aliases are assigned in first-seen order, so a sample keeps its alias when more runs are loaded.
+// Filters keep using real IDs (dropdown values); only what getTasks returns and the
+// dropdown/chip labels are aliased, so every chart, table and download follows the toggle.
+const sampleAlias   = new Map();  // real sampleId → 'Sample 001'
+const aliasToSample = new Map();  // 'Sample 001' → real sampleId (for sampleColor)
+
+function assignAliases() {
+  state.runs.forEach(r => r.tasks.forEach(t => {
+    if (!isRealSample(t.sampleId) || sampleAlias.has(t.sampleId)) return;
+    const a = `Sample ${String(sampleAlias.size + 1).padStart(3, '0')}`;
+    sampleAlias.set(t.sampleId, a);
+    aliasToSample.set(a, t.sampleId);
+  }));
+}
+
+const sampleLabel = id  => state.anonymize ? (sampleAlias.get(id) ?? 'Sample ?') : id;
+const runLabel    = run => state.anonymize ? `Run ${state.runs.indexOf(run) + 1}` : run.name;
+
+// Sample/run dropdown option labels and header run chips (values stay real IDs).
+function renderIdLabels() {
+  const samples = [...sampleAlias.keys()].sort((a, b) => sampleLabel(a).localeCompare(sampleLabel(b)));
+  const sf = document.getElementById('filter-sample');
+  const curS = sf.value;
+  sf.innerHTML = '<option value="">All samples</option>' +
+    samples.map(s => `<option value="${s}"${s===curS?' selected':''}>${sampleLabel(s)}</option>`).join('');
+
+  const rf = document.getElementById('filter-run');
+  const curR = rf.value;
+  rf.innerHTML = '<option value="">All runs</option>' +
+    state.runs.map(r => `<option value="${r.id}"${String(r.id)===curR?' selected':''}>${runLabel(r)}</option>`).join('');
+
+  document.getElementById('run-chips').innerHTML = state.runs.map((r,i) => {
+    const c = PALETTE[i % PALETTE.length];
+    return `<div class="run-chip" style="background:${c}1a;border-color:${c};color:${c}">
+      <span class="chip-dot" style="background:${c}"></span>${runLabel(r)}
+    </div>`;
+  }).join('');
+}
+
+function toggleAnonymize() {
+  state.anonymize = !state.anonymize;
+  document.getElementById('btn-anon').classList.toggle('active', state.anonymize);
+  renderIdLabels();
+  updateAll();
+}
+
 function getTasks({ ignoreStatus=false, ignoreSample=false, ignoreRun=false }={}) {
   let tasks = state.runs.flatMap(r => r.tasks).filter(t => isRealSample(t.sampleId));
   if (state.excludedProcs.size) tasks = tasks.filter(t => !state.excludedProcs.has(t.procShort));
@@ -929,6 +961,14 @@ function getTasks({ ignoreStatus=false, ignoreSample=false, ignoreRun=false }={}
   if (!ignoreRun) {
     const r = document.getElementById('filter-run').value;
     if (r) tasks = tasks.filter(t => String(t.runId) === r);
+  }
+  if (state.anonymize) {
+    // tag is replaced wholesale: the part after '@' can carry other IDs
+    const runNames = new Map(state.runs.map(r => [r.id, runLabel(r)]));
+    tasks = tasks.map(t => {
+      const a = sampleLabel(t.sampleId);
+      return { ...t, sampleId: a, tag: a, runName: runNames.get(t.runId) };
+    });
   }
   return tasks;
 }

@@ -53,6 +53,10 @@ explicit re-render calls.
    and drops non-sample tags via `isRealSample`. The Processes multi-select is the exception: it
    lives in `state.excludedProcs` (a set of *unchecked* `procShort` names, so newly loaded
    processes default to on) and is applied unconditionally — no `ignore*` flag bypasses it.
+   When `state.anonymize` is on, `getTasks` returns copies with `sampleId`/`tag` replaced by
+   `Sample 001`-style aliases and `runName` by `Run N` (ANONYMIZATION section). Anything that
+   displays a sample or run must come from `getTasks` or go through `sampleLabel` / `runLabel` —
+   never read `state.runs[].name` or raw task IDs for display.
 4. **Render** — `updateAll()` (714) → `renderMetrics()` + `renderActiveTab()` (719), a plain
    if/else dispatch on `state.activeTab` to one `renderX()` per tab. Charts go through
    `plot(div, traces, layout)` (PLOT HELPERS section), never `Plotly.react` directly: it merges the
