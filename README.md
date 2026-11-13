@@ -16,7 +16,8 @@ and it works, including on an air-gapped machine or straight off a shared drive.
 
 Runs are labelled from the file's parent directory when you drop a folder (e.g.
 `2026-01-25_14-56-25/execution_trace.txt` → `2026-01-25_14-56-25`), otherwise from the filename.
-Give files distinct names if you're loading several from the same place.
+Give files distinct names if you're loading several from the same place. With many runs loaded,
+the run list in the header scrolls rather than growing.
 
 ## Why not just use the built-in Nextflow report?
 
@@ -58,17 +59,53 @@ exit codes, container and work-directory details.
 - **Concurrent Memory (peak RSS / allocated)** — the same two views for RAM.
 - **Job Timeline** — Gantt chart, one bar per job, y-axis sample, colour process. Capped at 1,200
   bars; use the Sample filter to zoom in.
-- **Sample Breakdown** — sortable table of jobs, failures, cache hits, CPU-hours, wall-hours, peak
-  CPUs and peak RAM per sample per run.
-- **Process Durations** — runtime box plots per process, top 25 by median.
+- **Sample Breakdown** — sortable table of jobs, failures, cache hits, CPU-hours, wall-hours, total
+  allocated CPUs, peak CPUs and peak RAM per sample per run.
+- **Process Durations** — runtime box plots per process, top 25 by median. Order boxes by median or
+  A → Z, and colour them by median rank or A → Z (A → Z matches the Job Timeline colours).
 - **Memory / CPU Efficiency** — allocated vs actual per process, sorted most-over-provisioned
   first, with per-task spread underneath. Start here to tune `cpus` / `memory` directives.
-- **Typical Sample** — median and quartile cost of a sample, a CPU-hours vs bytes-written scatter,
-  and a per-sample table with **Download TSV**.
+- **Typical Sample** — median and quartile cost of a sample (CPU-hours, walltime, total allocated
+  CPUs, peak RAM, bytes written), a CPU-hours vs bytes-written scatter, and a per-sample table with
+  **Download TSV**. "Written" can be switched between `write_bytes` (bytes actually flushed to
+  disk) and `wchar` (everything passed to `write()`, including pipes and temp files); the TSV
+  always includes both.
 - **Queue Wait** — how long tasks sat between submit and start, per process, plus how many were
   pending simultaneously. Tall peaks mean you were starved of cluster slots, not slow.
 
-Filters at the top (status Completed / Failed / Cached, sample, run) apply to every tab.
+## Filters and display options
+
+The bar above the tabs applies to **every** chart, table, metric and download:
+
+- **Status** — include or exclude Completed / Failed / Cached tasks.
+- **Sample** / **Run** — focus on one sample or one run.
+- **Processes** — a checklist of every process in the loaded traces (with task counts), all
+  checked by default. Uncheck processes to drop them from every view and every calculation, e.g.
+  to leave out `MULTIQC` or a reference-building step. It has a search box and Select all / none
+  (which act on the processes currently shown by the search). Processes from newly loaded traces
+  start out checked.
+- **🕶 Anonymize IDs** — replaces sample IDs with `Sample 001`, `Sample 002`, … and run names with
+  `Run 1`, `Run 2`, … everywhere: charts, hover tooltips, tables, dropdowns, header chips, PNG and
+  TSV downloads. The whole trace `tag` is replaced, since text after the `@` can contain other IDs.
+  Colours don't change when you toggle, and aliases stay fixed as more runs are loaded. Turn it on
+  *before* exporting anything you plan to share; it resets to off when the page is reloaded.
+
+Colours are chosen so neighbouring samples in the stacked charts, and the processes you have
+checked, stay clearly distinguishable. Narrowing the Processes filter gives the remaining processes
+the most distinct colours. Past about 10 processes some colours get close; the legend and hover
+still identify every series.
+
+## Downloading charts
+
+Hover over any chart to show its toolbar. Besides Plotly's standard camera button (now saved at 2×
+resolution), each chart has two extra buttons:
+
+- 🌙 **Download PNG — large text, dark**
+- ☀️ **Download PNG — large text, light** (white background, for papers and printed slides)
+
+These re-draw the chart off-screen with about 1.6× larger text, thicker lines and bigger markers,
+add the chart's title, and save a 2× resolution PNG named after the title. The chart on the page is
+not changed.
 
 ## What the trace file needs to contain
 
@@ -77,8 +114,10 @@ empty if its column is missing. The fields used are:
 
 ```
 task_id  process  tag  status  cpus  memory  submit  start  complete
-duration  realtime  %cpu  peak_rss  write_bytes
+duration  realtime  %cpu  peak_rss  write_bytes  wchar
 ```
+
+(`wchar` is only used by the Typical Sample "written" toggle.)
 
 nf-core pipelines already write a wide field set, so their `execution_trace.txt` usually works
 as-is. For a custom pipeline, add to `nextflow.config`:
@@ -86,7 +125,7 @@ as-is. For a custom pipeline, add to `nextflow.config`:
 ```groovy
 trace {
     enabled = true
-    fields  = 'task_id,process,tag,status,cpus,memory,submit,start,complete,duration,realtime,%cpu,peak_rss,write_bytes'
+    fields  = 'task_id,process,tag,status,cpus,memory,submit,start,complete,duration,realtime,%cpu,peak_rss,write_bytes,wchar'
 }
 ```
 
@@ -101,4 +140,5 @@ be empty, every task is treated as a non-sample task, and the dashboard will loo
   one set of pipelines — if a real sample of yours disappears, or a reference task shows up as a
   sample, that list is what needs editing (`isRealSample` in the HTML file).
 - Box-plot and bar tabs show the top 25 processes; the Gantt shows the first 1,200 tasks.
-- Nothing is persisted — reloading the page clears loaded runs.
+- Nothing is persisted — reloading the page clears loaded runs and resets filters and the
+  Anonymize toggle.
