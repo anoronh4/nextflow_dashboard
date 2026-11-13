@@ -92,12 +92,15 @@ visibility from `data-tab` → `#pane-<tab>`, so the id must match exactly.
   `memory` directive; actual = `%cpu ÷ 100` effective cores and `peak_rss`. The efficiency tabs
   (`renderCpuEff` 1395, `renderMemEff` 1507) pair them as dim/bright bars sorted worst-ratio-first.
   Keep that dim-allocated / bright-actual visual language when touching them.
-- **Colors**: `sampleColor(s)` (492) assigns palette entries from `PALETTE` on first use and
-  memoizes in `sampleColorMap`, so a sample keeps its color across tabs. Processes use a separate
-  `PROC_PALETTE` via `processColor(name)` (A→Z rank among processes checked in the Processes
-  filter), shared by Job Timeline and Process Durations. Its order is farthest-point in OKLab —
-  don't reorder or append by eye; re-check with the dataviz skill's `validate_palette.js --pairs all`. Fills append an alpha
-  suffix to the hex (`+ 'b0'`).
+- **Colors**: samples and processes both draw from `DISTINCT_PALETTE`. `sampleColor(s)` uses the
+  sample's A→Z rank among all loaded samples (`sampleRank`, rebuilt in `assignAliases`), so stacked
+  charts — which also order A→Z — put consecutive slots on touching bands; it resolves anonymized
+  aliases to the real ID. `processColor(name)` uses A→Z rank among processes checked in the
+  Processes filter, shared by Job Timeline and Process Durations. The palette order is
+  farthest-point in OKLab and every consecutive pair (incl. 16→1 wrap) clears CVD ΔE ≥ 8 — don't
+  reorder or append by eye; re-check with the dataviz skill's `validate_palette.js` (adjacent and
+  `--pairs all`). `PALETTE` remains only for header run chips. Fills append an alpha suffix to the
+  hex (`+ 'b0'`).
 - Tables render by string-building `innerHTML`; sort handlers (`sortBy` 1192, `sortTypical` 1381)
   flip a module-level dir flag, update the `.sort-arrow` span, and re-render.
 
