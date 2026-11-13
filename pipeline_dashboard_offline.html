@@ -66,9 +66,13 @@
       position: sticky; top: 0; z-index: 100;
     }
     .app-logo { font-size: 1.4rem; }
-    .app-title { font-size: 1rem; font-weight: 700; color: var(--text); }
-    .app-subtitle { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
-    .run-chips-wrap { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-left: auto; }
+    .app-title { font-size: 1rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+    .app-subtitle { font-size: 0.72rem; color: var(--muted); margin-top: 1px; white-space: nowrap; }
+    /* max-height ≈ 6 rows of chips (25px chip + 6px gap); scrolls beyond that */
+    .run-chips-wrap {
+      display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-left: auto;
+      max-height: 180px; overflow-y: auto; padding-right: 4px;
+    }
     .run-chip {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600;
