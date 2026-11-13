@@ -55,8 +55,13 @@ explicit re-render calls.
    processes default to on) and is applied unconditionally — no `ignore*` flag bypasses it.
 4. **Render** — `updateAll()` (714) → `renderMetrics()` + `renderActiveTab()` (719), a plain
    if/else dispatch on `state.activeTab` to one `renderX()` per tab. Charts go through
-   `Plotly.react(div, traces, layout, {responsive:true})`; empty results call `Plotly.purge` and
-   write a `.chart-empty` placeholder.
+   `plot(div, traces, layout)` (PLOT HELPERS section), never `Plotly.react` directly: it merges the
+   chart's layout with the shared dark theme (`PLOT_FONT` / `AXIS_STYLE` / `LEGEND_STYLE`, merged
+   per key, so a chart only states what differs) and attaches `PLOT_CONFIG`, which adds the two
+   large-text PNG export buttons (`exportPlot(gd, 'dark'|'light')`). Export re-renders an off-screen
+   copy with scaled fonts/lines/markers and the `.chart-title` as the plot title; the light theme
+   remaps dark UI hexes via `LIGHT_REMAP`. New theme colors should go in `LIGHT_REMAP` too.
+   Empty results call `Plotly.purge` and write a `.chart-empty` placeholder.
 
 ### Adding a tab
 

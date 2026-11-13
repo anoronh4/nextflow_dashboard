@@ -557,6 +557,114 @@ function sampleColor(s) {
 }
 
 // ═══════════════════════════════════════════════
+// PLOT HELPERS — shared layout/config + large-text PNG export
+// ═══════════════════════════════════════════════
+const PLOT_FONT    = { color:'#c9d1d9', family:'system-ui,sans-serif', size:11 };
+const AXIS_STYLE   = { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d' };
+const LEGEND_STYLE = { bgcolor:'#161b22', bordercolor:'#30363d', borderwidth:1, font:{ size:10 } };
+
+// Per-chart layout on top of the shared dark theme. font/xaxis/yaxis/legend are merged
+// with the shared styles rather than replacing them, so charts only state what differs.
+function plotLayout(l) {
+  return {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    ...l,
+    font:   { ...PLOT_FONT, ...l.font },
+    xaxis:  { ...AXIS_STYLE, ...l.xaxis },
+    yaxis:  { ...AXIS_STYLE, ...l.yaxis },
+    legend: { ...LEGEND_STYLE, ...l.legend, font:{ ...LEGEND_STYLE.font, ...(l.legend || {}).font } },
+  };
+}
+
+function plot(div, traces, layout) {
+  Plotly.react(div, traces, plotLayout(layout), PLOT_CONFIG);
+}
+
+// Export: re-render an off-screen copy with larger text/marks so downloads stay legible
+// on slides and in figures. The on-screen chart is never modified.
+const EXPORT = { fontScale: 1.6, lineScale: 1.5, markerScale: 1.3, pixelRatio: 2 };
+const EXPORT_BG = { dark: '#0d1117', light: '#ffffff' };
+// Dark-theme UI colors → light equivalents (prefix match, so alpha suffixes like '#30363d44' survive).
+// '#30363d' doubles as the dim "allocated" bar color, so it maps to a light grey to stay dim on white.
+const LIGHT_REMAP = {
+  '#c9d1d9':'#24292f', '#e6edf3':'#24292f', '#8b949e':'#57606a',
+  '#30363d':'#d0d7de', '#21262d':'#eaeef2', '#161b22':'#ffffff', '#0d1117':'#ffffff',
+};
+const ICON_MOON = { width:24, height:24, path:'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' };
+const ICON_SUN  = { width:24, height:24,
+  path:'M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10z M11 1h2v4h-2z M11 19h2v4h-2z M1 11h4v2H1z M19 11h4v2h-4z' };
+
+const PLOT_CONFIG = {
+  responsive: true,
+  toImageButtonOptions: { scale: EXPORT.pixelRatio },
+  modeBarButtonsToAdd: [
+    { name:'Download PNG — large text, dark',  icon:ICON_MOON, click: gd => exportPlot(gd, 'dark') },
+    { name:'Download PNG — large text, light', icon:ICON_SUN,  click: gd => exportPlot(gd, 'light') },
+  ],
+};
+
+function walkExport(o, fn) {
+  if (Array.isArray(o)) { o.forEach((v, i) => { o[i] = walkExport(v, fn); }); return o; }
+  if (o && typeof o === 'object' && !(o instanceof Date)) {
+    for (const k of Object.keys(o)) o[k] = walkExport(o[k], fn);
+    if (o.font || o.textfont) fn(o);
+    return o;
+  }
+  return typeof o === 'string' ? fn(o) : o;
+}
+
+function exportPlot(gd, theme) {
+  const full = gd._fullLayout;
+  const data = structuredClone(gd.data);
+  const layout = structuredClone(gd.layout);
+
+  // Bigger text everywhere: global font (ticks, axis titles inherit it) + any explicit sizes.
+  const scaleFont = f => { if (f && typeof f.size === 'number') f.size = Math.round(f.size * EXPORT.fontScale); };
+  walkExport(layout, o => { if (typeof o === 'object') { scaleFont(o.font); scaleFont(o.textfont); } return o; });
+  walkExport(data,   o => { if (typeof o === 'object') { scaleFont(o.font); scaleFont(o.textfont); } return o; });
+  layout.font = { ...PLOT_FONT, ...layout.font };
+  if (!layout.font.size || layout.font.size === PLOT_FONT.size) layout.font.size = Math.round(PLOT_FONT.size * EXPORT.fontScale);
+
+  data.forEach(t => {
+    if (t.line && typeof t.line.width === 'number')    t.line.width *= EXPORT.lineScale;
+    if (t.marker && typeof t.marker.size === 'number') t.marker.size *= EXPORT.markerScale;
+  });
+
+  // Grow margins with the text and enlarge the canvas by the same amount so the plot area keeps its size.
+  const m0 = full.margin, title = gd.closest('.chart-panel')?.querySelector('.chart-title')?.textContent.trim() || 'chart';
+  const m = { l: m0.l * EXPORT.fontScale, r: m0.r * EXPORT.fontScale, b: m0.b * EXPORT.fontScale,
+              t: m0.t * EXPORT.fontScale + 30 * EXPORT.fontScale };
+  layout.margin = m;
+  layout.title = { text: title, x: 0.01, xanchor: 'left', font: { size: Math.round(14 * EXPORT.fontScale) } };
+  Object.keys(full).filter(k => /^[xy]axis\d*$/.test(k)).forEach(k => { layout[k] = { ...layout[k], automargin: true }; });
+  layout.paper_bgcolor = layout.plot_bgcolor = EXPORT_BG[theme];
+  const width  = Math.round(full.width  + (m.l + m.r) - (m0.l + m0.r));
+  const height = Math.round(full.height + (m.t + m.b) - (m0.t + m0.b));
+  layout.width = width; layout.height = height;
+
+  if (theme === 'light') {
+    const remap = v => {
+      if (typeof v !== 'string' || v[0] !== '#') return v;
+      const key = v.slice(0, 7).toLowerCase();
+      return LIGHT_REMAP[key] ? LIGHT_REMAP[key] + v.slice(7) : v;
+    };
+    walkExport(layout, remap);
+    walkExport(data, remap);
+    layout.paper_bgcolor = layout.plot_bgcolor = EXPORT_BG.light;
+  }
+
+  const filename = title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') + '_' + theme;
+  return Plotly.toImage({ data, layout, config: { staticPlot: true } },
+                        { format: 'png', width, height, scale: EXPORT.pixelRatio })
+    .then(url => {
+      const a = document.createElement('a');
+      a.href = url; a.download = filename + '.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      return url;
+    });
+}
+
+// ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
 const state = {
@@ -983,15 +1091,12 @@ function renderConcurrent() {
     hovertemplate: `<b>${s}</b><br>%{x|%b %d %H:%M:%S}<br>CPUs: %{y}<extra></extra>`,
   }));
 
-  Plotly.react(div, traces, {
-    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    font: { color: '#c9d1d9', family: 'system-ui,sans-serif', size: 11 },
-    xaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', tickformat:'%b %d\n%H:%M', title:'' },
-    yaxis: { title:'Concurrent CPUs', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    legend: { bgcolor:'#161b22', bordercolor:'#30363d', borderwidth:1, font:{size:10} },
+  plot(div, traces, {
+    xaxis: { tickformat:'%b %d\n%H:%M', title:'' },
+    yaxis: { title:'Concurrent CPUs', zeroline:false },
     hovermode: 'x unified',
     margin: { t:20, r:20, b:55, l:65 },
-  }, { responsive:true });
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1053,15 +1158,12 @@ function renderActualCpu() {
     hovertemplate: `<b>${s}</b><br>%{x|%b %d %H:%M:%S}<br>Effective cores: %{y:.2f}<extra></extra>`,
   }));
 
-  Plotly.react(div, traces, {
-    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    font: { color: '#c9d1d9', family: 'system-ui,sans-serif', size: 11 },
-    xaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', tickformat:'%b %d\n%H:%M', title:'' },
-    yaxis: { title:'Effective CPU cores (%cpu ÷ 100)', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    legend: { bgcolor:'#161b22', bordercolor:'#30363d', borderwidth:1, font:{size:10} },
+  plot(div, traces, {
+    xaxis: { tickformat:'%b %d\n%H:%M', title:'' },
+    yaxis: { title:'Effective CPU cores (%cpu ÷ 100)', zeroline:false },
     hovermode: 'x unified',
     margin: { t:20, r:20, b:55, l:75 },
-  }, { responsive:true });
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1127,15 +1229,12 @@ function renderMemory() {
     hovertemplate: `<b>${s}</b><br>%{x|%b %d %H:%M:%S}<br>RAM: %{y:.2f} GB<extra></extra>`,
   }));
 
-  Plotly.react(div, traces, {
-    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    font: { color: '#c9d1d9', family: 'system-ui,sans-serif', size: 11 },
-    xaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', tickformat:'%b %d\n%H:%M', title:'' },
-    yaxis: { title:'Concurrent RAM (GB)', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    legend: { bgcolor:'#161b22', bordercolor:'#30363d', borderwidth:1, font:{size:10} },
+  plot(div, traces, {
+    xaxis: { tickformat:'%b %d\n%H:%M', title:'' },
+    yaxis: { title:'Concurrent RAM (GB)', zeroline:false },
     hovermode: 'x unified',
     margin: { t:20, r:20, b:55, l:75 },
-  }, { responsive:true });
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1191,15 +1290,12 @@ function renderAllocMem() {
     hovertemplate: `<b>${s}</b><br>%{x|%b %d %H:%M:%S}<br>Allocated: %{y:.2f} GB<extra></extra>`,
   }));
 
-  Plotly.react(div, traces, {
-    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    font: { color: '#c9d1d9', family: 'system-ui,sans-serif', size: 11 },
-    xaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', tickformat:'%b %d\n%H:%M', title:'' },
-    yaxis: { title:'Allocated RAM (GB)', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    legend: { bgcolor:'#161b22', bordercolor:'#30363d', borderwidth:1, font:{size:10} },
+  plot(div, traces, {
+    xaxis: { tickformat:'%b %d\n%H:%M', title:'' },
+    yaxis: { title:'Allocated RAM (GB)', zeroline:false },
     hovermode: 'x unified',
     margin: { t:20, r:20, b:55, l:75 },
-  }, { responsive:true });
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1285,29 +1381,24 @@ function renderGantt() {
   const h = Math.max(420, Math.min(1000, uniqSamples.length * 32 + 120));
   div.style.height = h + 'px';
 
-  Plotly.react(div, traces, {
-    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    font: { color: '#c9d1d9', family: 'system-ui,sans-serif', size: 11 },
+  plot(div, traces, {
     xaxis: {
       type: 'date',
       tickformat: '%b %d\n%H:%M',
-      gridcolor: '#21262d', tickcolor: '#30363d', linecolor: '#30363d',
       title: '',
     },
     yaxis: {
-      gridcolor: '#21262d', tickcolor: '#30363d', linecolor: '#30363d',
       automargin: true,
       categoryorder: 'array',
       categoryarray: [...uniqSamples].reverse(), // first sample at top
     },
     legend: {
-      bgcolor: '#161b22', bordercolor: '#30363d', borderwidth: 1,
       font: { size: 9 }, orientation: 'v',
       title: { text: 'Process', font: { size: 10, color: '#8b949e' } },
     },
     margin: { t: 10, r: 10, b: 55, l: 190 },
     hovermode: 'closest',
-  }, { responsive: true });
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1451,14 +1542,13 @@ function renderProcess() {
     };
   });
 
-  Plotly.react(div, traces, {
-    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
-    font: { color:'#c9d1d9', family:'system-ui,sans-serif', size:10 },
-    xaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', tickangle:-40, automargin:true },
-    yaxis: { title:'Duration (minutes)', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
+  plot(div, traces, {
+    font: { size:10 },
+    xaxis: { tickangle:-40, automargin:true },
+    yaxis: { title:'Duration (minutes)', zeroline:false },
     showlegend: false,
     margin: { t:20, r:20, b:140, l:70 },
-  }, { responsive:true });
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1621,18 +1711,15 @@ function renderCpuEff() {
 
   const chartH = Math.max(360, procs.length * 26 + 80);
 
-  Plotly.react(barsDiv, [trAlloc, trActual], {
-    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+  plot(barsDiv, [trAlloc, trActual], {
     barmode: 'overlay',
-    font: { color:'#c9d1d9', family:'system-ui,sans-serif', size:11 },
-    xaxis: { title:'CPUs', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    yaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', automargin:true },
-    legend: { bgcolor:'#161b22', bordercolor:'#30363d', borderwidth:1, font:{size:10},
-              x:0.99, xanchor:'right', y:0.01, yanchor:'bottom' },
+    xaxis: { title:'CPUs', zeroline:false },
+    yaxis: { automargin:true },
+    legend: { x:0.99, xanchor:'right', y:0.01, yanchor:'bottom' },
     hovermode: 'closest',
     margin: { t:10, r:80, b:55, l:20 },
     height: chartH,
-  }, { responsive:true });
+  });
 
   // ── Box plots of actual CPU usage per process ──
   const allProcs = [...procs].reverse();
@@ -1649,16 +1736,14 @@ function renderCpuEff() {
     hovertemplate: `<b>${p.name}</b><br>Actual CPUs: %{x:.2f}<extra></extra>`,
   }));
 
-  Plotly.react(boxesDiv, boxTraces, {
-    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
-    font: { color:'#c9d1d9', family:'system-ui,sans-serif', size:11 },
-    xaxis: { title:'Actual CPUs used (%cpu ÷ 100)', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    yaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', automargin:true },
+  plot(boxesDiv, boxTraces, {
+    xaxis: { title:'Actual CPUs used (%cpu ÷ 100)', zeroline:false },
+    yaxis: { automargin:true },
     showlegend: false,
     hovermode: 'closest',
     margin: { t:10, r:20, b:55, l:20 },
     height: Math.max(360, allProcs.length * 26 + 80),
-  }, { responsive:true });
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1737,18 +1822,15 @@ function renderMemEff() {
 
   const chartH = Math.max(360, procs.length * 26 + 80);
 
-  Plotly.react(barsDiv, [trAlloc, trRss], {
-    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+  plot(barsDiv, [trAlloc, trRss], {
     barmode: 'overlay',
-    font: { color:'#c9d1d9', family:'system-ui,sans-serif', size:11 },
-    xaxis: { title:'Memory (GB)', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    yaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', automargin:true },
-    legend: { bgcolor:'#161b22', bordercolor:'#30363d', borderwidth:1, font:{size:10},
-              x:0.99, xanchor:'right', y:0.01, yanchor:'bottom' },
+    xaxis: { title:'Memory (GB)', zeroline:false },
+    yaxis: { automargin:true },
+    legend: { x:0.99, xanchor:'right', y:0.01, yanchor:'bottom' },
     hovermode: 'closest',
     margin: { t:10, r:80, b:55, l:20 },
     height: chartH,
-  }, { responsive:true });
+  });
 
   // ── Box plots of raw peak RSS per process ──
   // Use same process order (most wasteful first, reversed so worst is at top)
@@ -1766,16 +1848,14 @@ function renderMemEff() {
     hovertemplate: `<b>${p.name}</b><br>Peak RSS: %{x:.2f} GB<extra></extra>`,
   }));
 
-  Plotly.react(boxesDiv, boxTraces, {
-    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
-    font: { color:'#c9d1d9', family:'system-ui,sans-serif', size:11 },
-    xaxis: { title:'Peak RSS (GB)', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    yaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', automargin:true },
+  plot(boxesDiv, boxTraces, {
+    xaxis: { title:'Peak RSS (GB)', zeroline:false },
+    yaxis: { automargin:true },
     showlegend: false,
     hovermode: 'closest',
     margin: { t:10, r:20, b:55, l:20 },
     height: Math.max(360, allProcs.length * 26 + 80),
-  }, { responsive:true });
+  });
 }
 
 function downloadTypicalTSV() {
@@ -1958,11 +2038,9 @@ function renderTypicalSample() {
     x:xRange, y:[mWb,mWb],
     line:{color:'#3fb950', width:1.5, dash:'dash'}, hoverinfo:'skip', showlegend:false };
 
-  Plotly.react(scatterDiv, [scatterTrace, medX, medY], {
-    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
-    font: { color:'#c9d1d9', family:'system-ui,sans-serif', size:11 },
-    xaxis: { title:'CPU-hours', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    yaxis: { title:'Written (GB)', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
+  plot(scatterDiv, [scatterTrace, medX, medY], {
+    xaxis: { title:'CPU-hours', zeroline:false },
+    yaxis: { title:'Written (GB)', zeroline:false },
     showlegend: false,
     hovermode: 'closest',
     margin: { t:10, r:20, b:55, l:70 },
@@ -1972,7 +2050,7 @@ function renderTypicalSample() {
       { x:xRange[1], y:mWb, xanchor:'right', yanchor:'bottom', text:`median ${fmt1(mWb)} GB  `,
         showarrow:false, font:{color:'#3fb950', size:10} },
     ],
-  }, { responsive:true });
+  });
 
   // ── Table ──
   renderTypicalTable(stats);
@@ -2030,15 +2108,12 @@ function renderQueueWait() {
       hovertemplate: `<b>${s}</b><br>%{x|%b %d %H:%M:%S}<br>Pending: %{y}<extra></extra>`,
     }));
 
-    Plotly.react(concDiv, traces, {
-      paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-      font: { color: '#c9d1d9', family: 'system-ui,sans-serif', size: 11 },
-      xaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', tickformat:'%b %d\n%H:%M', title:'' },
-      yaxis: { title:'Pending tasks', gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-      legend: { bgcolor:'#161b22', bordercolor:'#30363d', borderwidth:1, font:{size:10} },
+    plot(concDiv, traces, {
+      xaxis: { tickformat:'%b %d\n%H:%M', title:'' },
+      yaxis: { title:'Pending tasks', zeroline:false },
       hovermode: 'x unified',
       margin: { t:20, r:20, b:55, l:65 },
-    }, { responsive:true });
+    });
   }
 
   // ── Queue wait by process (box plots) ──
@@ -2090,15 +2165,13 @@ function renderQueueWait() {
     hovertemplate: `<b>${p}</b><br>Wait: %{x:.1f} ${unit}<extra></extra>`,
   }));
 
-  Plotly.react(procDiv, boxTraces, {
-    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    font: { color: '#c9d1d9', family: 'system-ui,sans-serif', size: 11 },
-    xaxis: { title:`Queue wait (${unit})`, gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', zeroline:false },
-    yaxis: { gridcolor:'#21262d', tickcolor:'#30363d', linecolor:'#30363d', automargin: true },
+  plot(procDiv, boxTraces, {
+    xaxis: { title:`Queue wait (${unit})`, zeroline:false },
+    yaxis: { automargin: true },
     showlegend: false,
     hovermode: 'closest',
     margin: { t:10, r:20, b:55, l:20 },
-  }, { responsive:true });
+  });
 }
 
 // ═══════════════════════════════════════════════
