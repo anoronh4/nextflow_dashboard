@@ -182,6 +182,13 @@ code { color: var(--accent); background: rgba(88,166,255,0.08); padding: 1px 5px
 ::-webkit-scrollbar-track { background: var(--surface); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Two-state option buttons (Process Durations order/colour, Typical Sample "written" source) */
+.toggle-btn {
+  padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border);
+  cursor: pointer; font-size: 0.78rem; background: var(--surface2); color: #c9d1d9;
+}
+.toggle-btn.active { background: #1f6feb; color: #fff; }
 </style>
   <!-- src/vendor/plotly.min.js -->
   <script>
@@ -393,21 +400,13 @@ code { color: var(--accent); background: rgba(88,166,255,0.08); padding: 1px 5px
           <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;align-items:center;">
             <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);">
               <span>Order:</span>
-              <button id="proc-sort-median" onclick="setProcSort('median')"
-                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
-                By median</button>
-              <button id="proc-sort-alpha" onclick="setProcSort('alpha')"
-                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
-                A → Z</button>
+              <button id="proc-sort-median" class="toggle-btn active" onclick="setProcSort('median')">By median</button>
+              <button id="proc-sort-alpha" class="toggle-btn" onclick="setProcSort('alpha')">A → Z</button>
             </div>
             <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);">
               <span>Color:</span>
-              <button id="proc-color-median" onclick="setProcColor('median')"
-                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
-                By median</button>
-              <button id="proc-color-alpha" onclick="setProcColor('alpha')"
-                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
-                A → Z</button>
+              <button id="proc-color-median" class="toggle-btn active" onclick="setProcColor('median')">By median</button>
+              <button id="proc-color-alpha" class="toggle-btn" onclick="setProcColor('alpha')">A → Z</button>
             </div>
           </div>
         </div>
@@ -464,12 +463,8 @@ code { color: var(--accent); background: rgba(88,166,255,0.08); padding: 1px 5px
       <!-- written metric toggle -->
       <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
         <span>Written data source:</span>
-        <button id="wb-btn-write_bytes" onclick="setWrittenMetric('write_bytes')"
-          style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
-          write_bytes</button>
-        <button id="wb-btn-wchar" onclick="setWrittenMetric('wchar')"
-          style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
-          wchar</button>
+        <button id="wb-btn-write_bytes" class="toggle-btn active" onclick="setWrittenMetric('write_bytes')">write_bytes</button>
+        <button id="wb-btn-wchar" class="toggle-btn" onclick="setWrittenMetric('wchar')">wchar</button>
         <span style="font-size:0.75rem;color:var(--muted);margin-left:4px;" id="wb-hint"></span>
       </div>
       <!-- summary cards -->
@@ -1378,18 +1373,14 @@ function renderTable() {
 // ═══════════════════════════════════════════════
 function setProcSort(order) {
   state.procSortOrder = order;
-  document.getElementById('proc-sort-median').style.background = order === 'median' ? '#1f6feb' : '#21262d';
-  document.getElementById('proc-sort-median').style.color      = order === 'median' ? '#fff'    : '#c9d1d9';
-  document.getElementById('proc-sort-alpha').style.background  = order === 'alpha'  ? '#1f6feb' : '#21262d';
-  document.getElementById('proc-sort-alpha').style.color       = order === 'alpha'  ? '#fff'    : '#c9d1d9';
+  document.getElementById('proc-sort-median').classList.toggle('active', order === 'median');
+  document.getElementById('proc-sort-alpha').classList.toggle('active', order === 'alpha');
   renderProcess();
 }
 function setProcColor(order) {
   state.procColorOrder = order;
-  document.getElementById('proc-color-median').style.background = order === 'median' ? '#1f6feb' : '#21262d';
-  document.getElementById('proc-color-median').style.color      = order === 'median' ? '#fff'    : '#c9d1d9';
-  document.getElementById('proc-color-alpha').style.background  = order === 'alpha'  ? '#1f6feb' : '#21262d';
-  document.getElementById('proc-color-alpha').style.color       = order === 'alpha'  ? '#fff'    : '#c9d1d9';
+  document.getElementById('proc-color-median').classList.toggle('active', order === 'median');
+  document.getElementById('proc-color-alpha').classList.toggle('active', order === 'alpha');
   renderProcess();
 }
 function renderProcess() {
@@ -1791,10 +1782,8 @@ function renderTypicalTable(stats) {
 
 function setWrittenMetric(metric) {
   state.writtenMetric = metric;
-  document.getElementById('wb-btn-write_bytes').style.background = metric === 'write_bytes' ? '#1f6feb' : '#21262d';
-  document.getElementById('wb-btn-write_bytes').style.color      = metric === 'write_bytes' ? '#fff'    : '#c9d1d9';
-  document.getElementById('wb-btn-wchar').style.background       = metric === 'wchar'       ? '#1f6feb' : '#21262d';
-  document.getElementById('wb-btn-wchar').style.color            = metric === 'wchar'       ? '#fff'    : '#c9d1d9';
+  document.getElementById('wb-btn-write_bytes').classList.toggle('active', metric === 'write_bytes');
+  document.getElementById('wb-btn-wchar').classList.toggle('active', metric === 'wchar');
   const hints = {
     'write_bytes': 'actual bytes flushed to disk',
     'wchar':       'all bytes passed to write() — includes pipes & temp files',

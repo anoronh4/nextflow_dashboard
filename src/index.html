@@ -197,21 +197,13 @@
           <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;align-items:center;">
             <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);">
               <span>Order:</span>
-              <button id="proc-sort-median" onclick="setProcSort('median')"
-                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
-                By median</button>
-              <button id="proc-sort-alpha" onclick="setProcSort('alpha')"
-                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
-                A → Z</button>
+              <button id="proc-sort-median" class="toggle-btn active" onclick="setProcSort('median')">By median</button>
+              <button id="proc-sort-alpha" class="toggle-btn" onclick="setProcSort('alpha')">A → Z</button>
             </div>
             <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);">
               <span>Color:</span>
-              <button id="proc-color-median" onclick="setProcColor('median')"
-                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
-                By median</button>
-              <button id="proc-color-alpha" onclick="setProcColor('alpha')"
-                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
-                A → Z</button>
+              <button id="proc-color-median" class="toggle-btn active" onclick="setProcColor('median')">By median</button>
+              <button id="proc-color-alpha" class="toggle-btn" onclick="setProcColor('alpha')">A → Z</button>
             </div>
           </div>
         </div>
@@ -268,12 +260,8 @@
       <!-- written metric toggle -->
       <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
         <span>Written data source:</span>
-        <button id="wb-btn-write_bytes" onclick="setWrittenMetric('write_bytes')"
-          style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
-          write_bytes</button>
-        <button id="wb-btn-wchar" onclick="setWrittenMetric('wchar')"
-          style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
-          wchar</button>
+        <button id="wb-btn-write_bytes" class="toggle-btn active" onclick="setWrittenMetric('write_bytes')">write_bytes</button>
+        <button id="wb-btn-wchar" class="toggle-btn" onclick="setWrittenMetric('wchar')">wchar</button>
         <span style="font-size:0.75rem;color:var(--muted);margin-left:4px;" id="wb-hint"></span>
       </div>
       <!-- summary cards -->

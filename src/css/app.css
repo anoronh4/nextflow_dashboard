@@ -164,3 +164,10 @@ code { color: var(--accent); background: rgba(88,166,255,0.08); padding: 1px 5px
 ::-webkit-scrollbar-track { background: var(--surface); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Two-state option buttons (Process Durations order/colour, Typical Sample "written" source) */
+.toggle-btn {
+  padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border);
+  cursor: pointer; font-size: 0.78rem; background: var(--surface2); color: #c9d1d9;
+}
+.toggle-btn.active { background: #1f6feb; color: #fff; }

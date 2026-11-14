@@ -3,18 +3,14 @@
 // ═══════════════════════════════════════════════
 function setProcSort(order) {
   state.procSortOrder = order;
-  document.getElementById('proc-sort-median').style.background = order === 'median' ? '#1f6feb' : '#21262d';
-  document.getElementById('proc-sort-median').style.color      = order === 'median' ? '#fff'    : '#c9d1d9';
-  document.getElementById('proc-sort-alpha').style.background  = order === 'alpha'  ? '#1f6feb' : '#21262d';
-  document.getElementById('proc-sort-alpha').style.color       = order === 'alpha'  ? '#fff'    : '#c9d1d9';
+  document.getElementById('proc-sort-median').classList.toggle('active', order === 'median');
+  document.getElementById('proc-sort-alpha').classList.toggle('active', order === 'alpha');
   renderProcess();
 }
 function setProcColor(order) {
   state.procColorOrder = order;
-  document.getElementById('proc-color-median').style.background = order === 'median' ? '#1f6feb' : '#21262d';
-  document.getElementById('proc-color-median').style.color      = order === 'median' ? '#fff'    : '#c9d1d9';
-  document.getElementById('proc-color-alpha').style.background  = order === 'alpha'  ? '#1f6feb' : '#21262d';
-  document.getElementById('proc-color-alpha').style.color       = order === 'alpha'  ? '#fff'    : '#c9d1d9';
+  document.getElementById('proc-color-median').classList.toggle('active', order === 'median');
+  document.getElementById('proc-color-alpha').classList.toggle('active', order === 'alpha');
   renderProcess();
 }
 function renderProcess() {

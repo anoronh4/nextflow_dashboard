@@ -116,10 +116,8 @@ function renderTypicalTable(stats) {
 
 function setWrittenMetric(metric) {
   state.writtenMetric = metric;
-  document.getElementById('wb-btn-write_bytes').style.background = metric === 'write_bytes' ? '#1f6feb' : '#21262d';
-  document.getElementById('wb-btn-write_bytes').style.color      = metric === 'write_bytes' ? '#fff'    : '#c9d1d9';
-  document.getElementById('wb-btn-wchar').style.background       = metric === 'wchar'       ? '#1f6feb' : '#21262d';
-  document.getElementById('wb-btn-wchar').style.color            = metric === 'wchar'       ? '#fff'    : '#c9d1d9';
+  document.getElementById('wb-btn-write_bytes').classList.toggle('active', metric === 'write_bytes');
+  document.getElementById('wb-btn-wchar').classList.toggle('active', metric === 'wchar');
   const hints = {
     'write_bytes': 'actual bytes flushed to disk',
     'wchar':       'all bytes passed to write() — includes pipes & temp files',
