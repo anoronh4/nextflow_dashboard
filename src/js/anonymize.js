@@ -1,7 +1,8 @@
 // Anonymize IDs. Aliases (Sample 001…, Run N) are applied at the end of getTasks and in the
 // labels. renderIdLabels also (re)builds the sample/run dropdowns and header run chips, since
 // it is what decides real vs alias labels. Filters keep using real IDs.
-// Uses: state, isRealSample (filters.js), updateAll (app.js).
+// Uses: state (state.js), PALETTE and sampleRank, which it rebuilds (colors.js),
+// isRealSample (filters.js), updateAll (app.js).
 
 // ═══════════════════════════════════════════════
 // ANONYMIZATION

@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A single-file, fully offline dashboard that visualizes Nextflow / nf-core `execution_trace.txt`
-files. The user drops one or more trace files onto the page; everything is parsed and charted
-client-side. There is no server, no package manager and no test suite; one small stdlib Python script (`build.py`) bundles the source into the shareable single file.
+A fully offline dashboard, shipped as one self-contained HTML file, that visualizes Nextflow /
+nf-core `execution_trace.txt` files. The user drops one or more trace files onto the page;
+everything is parsed and charted client-side. There is no server, no package manager and no test
+suite; one small stdlib Python script (`build.py`) bundles the source into the shareable file.
 
 Source lives in `src/` (open `src/index.html` while editing; no build needed to test).
 `pipeline_dashboard_offline.html` at the root is a **generated** single-file bundle for sharing:
