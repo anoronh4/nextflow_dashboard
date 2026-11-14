@@ -162,12 +162,24 @@ trace {
 an `@`, so `SAMPLE-01@bwa_mem` → `SAMPLE-01`). If your processes don't set `tag`, the column will
 be empty, every task is treated as a non-sample task, and the dashboard will look empty.
 
+## Editing the dashboard
+
+The readable source is in [`src/`](src/): `index.html` (markup), `css/app.css`, one JavaScript file
+per concern in `js/`, and one per tab in `js/charts/`. The vendored Plotly and Bootstrap files are in
+`src/vendor/`. `pipeline_dashboard_offline.html` is generated from them.
+
+1. Open `src/index.html` in a browser; it works directly, offline, with no build step.
+2. Edit files in `src/` and reload the page to see changes.
+3. Regenerate the single file: `python3 build.py` (Python 3, nothing to install).
+4. Commit `src/` and `pipeline_dashboard_offline.html` together. `python3 build.py --check` tells
+   you if you forgot step 3.
+
 ## Limitations
 
 - Reference and index tasks are filtered out of all charts by a small built-in blocklist
   (`genome.fa`, `grch38`, `blocklist_breakpoints*`, and bare filename-style tags). It is tuned for
   one set of pipelines — if a real sample of yours disappears, or a reference task shows up as a
-  sample, that list is what needs editing (`isRealSample` in the HTML file).
+  sample, that list is what needs editing (`isRealSample` in `src/js/filters.js`).
 - Box-plot and bar tabs show the top 25 processes; the Gantt shows the first 1,200 tasks.
 - Nothing is persisted — reloading the page clears loaded runs and resets filters and the
   Anonymize toggle.

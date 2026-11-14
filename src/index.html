@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pipeline Performance Dashboard</title>
+  <link rel="stylesheet" href="vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="vendor/plotly.min.js"></script>
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="app-header">
+  <div class="app-logo">🧬</div>
+  <div>
+    <div class="app-title">Pipeline Performance Dashboard</div>
+    <div class="app-subtitle">nf-core execution trace visualizer</div>
+  </div>
+  <div class="run-chips-wrap" id="run-chips"></div>
+</div>
+
+<!-- UPLOAD ZONE -->
+<div class="upload-wrap">
+  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+    <div class="upload-icon">📂</div>
+    <div class="upload-title">Drop execution_trace.txt files here</div>
+    <div class="upload-sub">Or click to select — load one run or many to compare. Each file is one Nextflow run.</div>
+    <input type="file" id="file-input" multiple accept=".txt,.tsv" style="display:none">
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="main">
+  <!-- empty state shown before load -->
+  <div id="empty-state" class="empty-state" style="margin-top: 40px;">
+    <div class="empty-icon">🔬</div>
+    <div class="empty-title">No trace files loaded yet</div>
+    <div>Drop your <code>execution_trace.txt</code> files above to get started.<br>
+    You can load multiple files to compare runs side by side.</div>
+  </div>
+
+  <!-- dashboard shown after load -->
+  <div id="dashboard" style="display:none">
+
+    <!-- FILTERS -->
+    <div class="filter-bar">
+      <span class="filter-label">Status</span>
+      <button class="fbtn active-green" data-status="COMPLETED" id="btn-COMPLETED" onclick="toggleStatus(this)">✓ Completed</button>
+      <button class="fbtn active-red"   data-status="FAILED"    id="btn-FAILED"    onclick="toggleStatus(this)">✗ Failed</button>
+      <button class="fbtn active"        data-status="CACHED"    id="btn-CACHED"    onclick="toggleStatus(this)">⚡ Cached</button>
+      <div class="filter-sep"></div>
+      <span class="filter-label">Sample</span>
+      <select class="fselect" id="filter-sample" onchange="updateAll()">
+        <option value="">All samples</option>
+      </select>
+      <div class="filter-sep"></div>
+      <span class="filter-label">Run</span>
+      <select class="fselect" id="filter-run" onchange="updateAll()">
+        <option value="">All runs</option>
+      </select>
+      <div class="filter-sep"></div>
+      <button class="fbtn" id="btn-anon" onclick="toggleAnonymize()"
+        title="Replace sample IDs and run names with Sample 001 / Run 1 in every chart, table and download">🕶 Anonymize IDs</button>
+      <div class="filter-sep"></div>
+      <span class="filter-label">Processes</span>
+      <div class="proc-filter" id="proc-filter">
+        <button class="fselect" id="proc-filter-btn" onclick="toggleProcPanel(event)">All processes ▾</button>
+        <div class="proc-panel" id="proc-panel" style="display:none">
+          <input type="text" class="fselect" id="proc-search" placeholder="Search processes…" oninput="renderProcList()">
+          <div class="proc-panel-actions">
+            <button class="fbtn" onclick="setAllProcs(true)">Select all</button>
+            <button class="fbtn" onclick="setAllProcs(false)">Select none</button>
+          </div>
+          <div class="proc-list" id="proc-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- METRICS ROW -->
+    <div class="metric-grid" id="metric-grid"></div>
+
+    <!-- TABS -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="concurrent"  onclick="switchTab(this)">⚡ Concurrent CPU (allocated)</button>
+      <button class="tab-btn"        data-tab="actualcpu"  onclick="switchTab(this)">🔥 Concurrent CPU (actual)</button>
+      <button class="tab-btn"        data-tab="memory"     onclick="switchTab(this)">🧠 Concurrent Memory (peak RSS)</button>
+      <button class="tab-btn"        data-tab="allocmem"   onclick="switchTab(this)">📦 Concurrent Memory (allocated)</button>
+      <button class="tab-btn"        data-tab="gantt"      onclick="switchTab(this)">📊 Job Timeline</button>
+      <button class="tab-btn"        data-tab="table"      onclick="switchTab(this)">📋 Sample Breakdown</button>
+      <button class="tab-btn"        data-tab="process"    onclick="switchTab(this)">⏱ Process Durations</button>
+      <button class="tab-btn"        data-tab="memeff"     onclick="switchTab(this)">💾 Memory Efficiency</button>
+      <button class="tab-btn"        data-tab="cpueff"     onclick="switchTab(this)">⚙️ CPU Efficiency</button>
+      <button class="tab-btn"        data-tab="typical"    onclick="switchTab(this)">🧬 Typical Sample</button>
+      <button class="tab-btn"        data-tab="queue"      onclick="switchTab(this)">⏳ Queue Wait</button>
+    </div>
+
+    <!-- TAB PANES -->
+    <div id="pane-concurrent" class="tab-pane">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Simultaneous Cluster CPU Usage Over Time</div>
+          <div class="chart-desc">CPUs actively running across all jobs, stacked by sample. Only shows tasks that actually ran (Completed + Failed). Toggle "Cached" above to include cache hits.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-concurrent" style="height:460px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-actualcpu" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Simultaneous Cluster CPU Usage Over Time (Actual)</div>
+          <div class="chart-desc">Effective CPU cores actively computing, stacked by sample. Each task contributes <code>%cpu ÷ 100</code> — its real utilization regardless of how many cores were allocated. Compare with the Allocated tab to spot over-provisioned processes.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-actualcpu" style="height:460px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-memory" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Simultaneous Cluster Memory Usage Over Time</div>
+          <div class="chart-desc">Total RAM (peak RSS) held by all concurrently running jobs, stacked by sample. Each task contributes its <code>peak_rss</code> for its full execution window.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-memory" style="height:460px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-allocmem" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Simultaneous Cluster Memory Usage Over Time (Allocated)</div>
+          <div class="chart-desc">Total RAM requested/allocated per job, stacked by sample. Uses the <code>memory</code> directive from the pipeline config — the ceiling each job was granted, regardless of what it actually used.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-allocmem" style="height:460px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-gantt" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Job Execution Timeline (Gantt)</div>
+          <div class="chart-desc">Each bar is one job; y-axis = sample, color = process. Use the Sample filter above to zoom in on a specific sample.</div>
+        </div>
+        <div id="gantt-warn" class="warn-bar" style="display:none;margin-top:10px;"></div>
+        <div class="chart-body">
+          <div id="chart-gantt" style="height:520px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-table" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Per-Sample Performance Summary</div>
+          <div class="chart-desc">Aggregated metrics across all runs. Click column headers to sort. CPU-hours = realtime × CPUs per task.</div>
+        </div>
+        <div class="chart-body" style="padding:12px 16px 16px;">
+          <div class="data-table-wrap">
+            <table class="data-table" id="sample-table">
+              <thead>
+                <tr>
+                  <th onclick="sortBy('sample')">Sample <span class="sort-arrow" id="arr-sample">↕</span></th>
+                  <th onclick="sortBy('run')">Run <span class="sort-arrow" id="arr-run">↕</span></th>
+                  <th onclick="sortBy('jobs')">Jobs <span class="sort-arrow" id="arr-jobs">↕</span></th>
+                  <th onclick="sortBy('completed')">Done <span class="sort-arrow" id="arr-completed">↕</span></th>
+                  <th onclick="sortBy('failed')">Failed <span class="sort-arrow" id="arr-failed">↕</span></th>
+                  <th onclick="sortBy('cached')">Cached <span class="sort-arrow" id="arr-cached">↕</span></th>
+                  <th onclick="sortBy('cpuHours')">CPU-hrs <span class="sort-arrow active" id="arr-cpuHours">↓</span></th>
+                  <th onclick="sortBy('wallHours')">Wall-hrs <span class="sort-arrow" id="arr-wallHours">↕</span></th>
+                  <th onclick="sortBy('totalCpus')">Total CPUs (alloc) <span class="sort-arrow" id="arr-totalCpus">↕</span></th>
+                  <th onclick="sortBy('maxCpus')">Peak CPUs <span class="sort-arrow" id="arr-maxCpus">↕</span></th>
+                  <th onclick="sortBy('peakRss')">Peak RAM <span class="sort-arrow" id="arr-peakRss">↕</span></th>
+                </tr>
+              </thead>
+              <tbody id="table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-process" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Process Duration Distribution</div>
+          <div class="chart-desc" id="proc-desc">Box plots of actual runtime (realtime) per process. Top 25 shown. Hover for details.</div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;align-items:center;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);">
+              <span>Order:</span>
+              <button id="proc-sort-median" onclick="setProcSort('median')"
+                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
+                By median</button>
+              <button id="proc-sort-alpha" onclick="setProcSort('alpha')"
+                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
+                A → Z</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);">
+              <span>Color:</span>
+              <button id="proc-color-median" onclick="setProcColor('median')"
+                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
+                By median</button>
+              <button id="proc-color-alpha" onclick="setProcColor('alpha')"
+                style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
+                A → Z</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-process" style="height:500px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-cpueff" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Allocated vs Actual CPU Usage by Process</div>
+          <div class="chart-desc">Median allocated CPUs (dim bar) vs median actual CPUs used (bright bar, derived from %cpu) per process, sorted by efficiency (most over-provisioned at top). Hover for exact values and utilisation %.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-cpueff-bars" style="height:560px;"></div>
+        </div>
+      </div>
+      <div class="chart-panel" style="margin-top:16px">
+        <div class="chart-header">
+          <div class="chart-title">Actual CPU Usage Distribution by Process</div>
+          <div class="chart-desc">Box plots of actual CPUs used (%cpu ÷ 100) per task for each process — shows spread across tasks, not just the median.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-cpueff-boxes" style="height:520px;"></div>
+        </div>
+      </div>
+    </div><!-- /pane-cpueff -->
+
+    <div id="pane-memeff" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Allocated vs Peak RSS by Process</div>
+          <div class="chart-desc">Median allocated memory (dim bar) vs median peak RSS (bright bar) per process, sorted by efficiency (most over-provisioned at top). Hover for exact values and utilisation %.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-memeff-bars" style="height:560px;"></div>
+        </div>
+      </div>
+      <div class="chart-panel" style="margin-top:16px">
+        <div class="chart-header">
+          <div class="chart-title">Peak RSS Distribution by Process</div>
+          <div class="chart-desc">Box plots of peak RSS per task for each process — shows spread, not just the median. Processes with any allocation data are included.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-memeff-boxes" style="height:520px;"></div>
+        </div>
+      </div>
+    </div><!-- /pane-memeff -->
+
+    <div id="pane-typical" class="tab-pane" style="display:none">
+
+      <!-- written metric toggle -->
+      <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
+        <span>Written data source:</span>
+        <button id="wb-btn-write_bytes" onclick="setWrittenMetric('write_bytes')"
+          style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#1f6feb;color:#fff;">
+          write_bytes</button>
+        <button id="wb-btn-wchar" onclick="setWrittenMetric('wchar')"
+          style="padding:3px 10px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:0.78rem;background:#21262d;color:#c9d1d9;">
+          wchar</button>
+        <span style="font-size:0.75rem;color:var(--muted);margin-left:4px;" id="wb-hint"></span>
+      </div>
+      <!-- summary cards -->
+      <div class="metric-grid" id="typical-cards" style="margin-bottom:14px;"></div>
+
+      <!-- scatter: cpu-hours vs written GB -->
+      <div class="chart-panel" style="margin-bottom:14px;">
+        <div class="chart-header">
+          <div class="chart-title">CPU-hours vs. Written Data per Sample</div>
+          <div class="chart-desc">Each point is one sample in one run. Marker size = peak RSS. Dashed lines show the median. Hover for full details.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-typical-scatter" style="height:400px;"></div>
+        </div>
+      </div>
+
+      <!-- per-sample table -->
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Per-Sample Detail</div>
+          <div class="chart-desc">One row per sample per run. Click headers to sort.</div>
+          <button onclick="downloadTypicalTSV()" style="
+            margin-top:6px; padding:4px 12px; font-size:0.8rem; cursor:pointer;
+            background:#21262d; color:#c9d1d9; border:1px solid #30363d;
+            border-radius:6px; transition:background 0.15s;">
+            ⬇ Download TSV
+          </button>
+        </div>
+        <div class="chart-body" style="padding:12px 16px 16px;">
+          <div class="data-table-wrap">
+            <table class="data-table" id="typical-table">
+              <thead>
+                <tr>
+                  <th onclick="sortTypical('sample')">Sample <span class="sort-arrow" id="tarr-sample">↕</span></th>
+                  <th onclick="sortTypical('run')">Run <span class="sort-arrow" id="tarr-run">↕</span></th>
+                  <th onclick="sortTypical('cpuH')">CPU-hrs <span class="sort-arrow active" id="tarr-cpuH">↓</span></th>
+                  <th onclick="sortTypical('wallH')">Wall-hrs <span class="sort-arrow" id="tarr-wallH">↕</span></th>
+                  <th onclick="sortTypical('totalAllocCpus')">Total CPUs (alloc) <span class="sort-arrow" id="tarr-totalAllocCpus">↕</span></th>
+                  <th onclick="sortTypical('peakCpu')">Peak Conc. CPUs <span class="sort-arrow" id="tarr-peakCpu">↕</span></th>
+                  <th onclick="sortTypical('peakAllocMemGB')">Peak Conc. RAM (alloc) <span class="sort-arrow" id="tarr-peakAllocMemGB">↕</span></th>
+                  <th onclick="sortTypical('peakRssGB')">Peak RSS / task <span class="sort-arrow" id="tarr-peakRssGB">↕</span></th>
+                  <th onclick="sortTypical('writtenGB')">Written (GB) <span class="sort-arrow" id="tarr-writtenGB">↕</span></th>
+                  <th onclick="sortTypical('nTasks')">Tasks <span class="sort-arrow" id="tarr-nTasks">↕</span></th>
+                </tr>
+              </thead>
+              <tbody id="typical-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /pane-typical -->
+
+    <div id="pane-queue" class="tab-pane" style="display:none">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title">Concurrent Pending Tasks Over Time</div>
+          <div class="chart-desc">Number of tasks submitted but not yet started, stacked by sample. A tall peak means many jobs were queued simultaneously waiting for cluster resources.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-queue-concurrent" style="height:380px;"></div>
+        </div>
+      </div>
+      <div class="chart-panel" style="margin-top:16px">
+        <div class="chart-header">
+          <div class="chart-title">Queue Wait Time by Process</div>
+          <div class="chart-desc">Distribution of time between submit and start for each process (top 25 by median wait). Helps identify which steps spend the most time waiting for cluster slots.</div>
+        </div>
+        <div class="chart-body">
+          <div id="chart-queue-process" style="height:520px;"></div>
+        </div>
+      </div>
+    </div><!-- /pane-queue -->
+
+  </div><!-- /dashboard -->
+</div><!-- /main -->
+
+<script src="js/state.js"></script>
+<script src="js/parse.js"></script>
+<script src="js/format.js"></script>
+<script src="js/colors.js"></script>
+<script src="js/plot.js"></script>
+<script src="js/filters.js"></script>
+<script src="js/anonymize.js"></script>
+<script src="js/charts/concurrency.js"></script>
+<script src="js/charts/timeline.js"></script>
+<script src="js/charts/sample-table.js"></script>
+<script src="js/charts/durations.js"></script>
+<script src="js/charts/efficiency.js"></script>
+<script src="js/charts/typical.js"></script>
+<script src="js/charts/queue.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
