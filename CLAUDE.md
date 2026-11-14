@@ -105,11 +105,12 @@ Create `src/js/charts/foo.js` with a `renderFoo()` that starts from `getTasks()`
   `@`. `isRealSample` (`filters.js`) filters out reference/index tasks — it hardcodes `genome.fa`,
   `grch38`, `blocklist_breakpoints*` plus a "no dash but has a dot" filename heuristic. This is a
   pipeline-specific blocklist; extend it here when new non-sample tags show up.
-- **Concurrency curves** are all the same event-sweep: emit `+x` at `start` and `-x` at `complete`,
-  sort by time, and record the running total *before and after* each timestamp so Plotly draws a
-  true step function. `buildConcurrentData` (`charts/concurrency.js`, CPUs) and `buildConcurrentMemData` (`charts/concurrency.js`, bytes)
-  are the reusable versions; `renderAllocMem`, `renderActualCpu`, the queue-depth chart, and the
-  per-sample peaks in `computeSampleStats` each re-implement the sweep over a different quantity.
+- **Concurrency curves** are all the same event-sweep: `+x` at start, `-x` at end, sorted by time.
+  `stackedSteps(tasks, from, to, value, record)` (`charts/concurrency.js`) builds the per-sample
+  step series (totals recorded before and after each timestamp so Plotly draws true steps; `record`
+  converts units at record time, e.g. bytes → GB) for the four concurrent charts and Queue Wait;
+  `peakConcurrent(tasks, value)` gives single peaks (Peak CPUs card, Typical Sample). Don't
+  hand-roll a new sweep.
 - **Allocated vs actual** is the analytical theme of the dashboard: allocated = `cpus` and the
   `memory` directive; actual = `%cpu ÷ 100` effective cores and `peak_rss`. The efficiency tabs
   (`renderCpuEff`, `renderMemEff` in `charts/efficiency.js`) pair them as dim/bright bars sorted worst-ratio-first.

@@ -120,17 +120,7 @@ function renderMetrics() {
 }
 
 function computePeak(tasks) {
-  const valid = tasks.filter(t => t.start && t.complete);
-  if (!valid.length) return 0;
-  const evs = [];
-  valid.forEach(t => {
-    evs.push([t.start.getTime(), t.cpus]);
-    evs.push([t.complete.getTime(), -t.cpus]);
-  });
-  evs.sort((a,b) => a[0]-b[0]);
-  let cur=0, peak=0;
-  evs.forEach(([,d]) => { cur+=d; if(cur>peak) peak=cur; });
-  return peak;
+  return peakConcurrent(tasks.filter(t => t.start && t.complete), t => t.cpus);
 }
 
 // ═══════════════════════════════════════════════

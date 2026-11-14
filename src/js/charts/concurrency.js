@@ -1,43 +1,52 @@
 // ═══════════════════════════════════════════════
 // CHART 1: CONCURRENT CPU (stacked area by sample)
 // ═══════════════════════════════════════════════
-function buildConcurrentData(tasks) {
-  const valid = tasks.filter(t => t.start && t.complete);
-  if (!valid.length) return null;
+// ── Event sweeps ─────────────────────────────────────────────────────────
+// Every concurrency curve is the same trick: each task adds +value when it starts and -value
+// when it ends; sort those events by time and keep a running total.
 
-  const samples = [...new Set(valid.map(t => t.sampleId))].sort();
-
-  // Build sorted event list
+// Stacked step series, one per sample. At each distinct timestamp the running totals are
+// recorded twice, before and after applying that timestamp's events, so Plotly draws vertical
+// steps instead of slopes. `record` transforms a total when it is stored (e.g. bytes → GB).
+function stackedSteps(tasks, from, to, value, record = v => v) {
+  const samples = [...new Set(tasks.map(t => t.sampleId))].sort();
   const evs = [];
-  valid.forEach(t => {
-    evs.push({ t: t.start.getTime(),    d: +t.cpus,   s: t.sampleId });
-    evs.push({ t: t.complete.getTime(), d: -t.cpus,   s: t.sampleId });
+  tasks.forEach(t => {
+    const v = value(t);
+    evs.push({ t: from(t).getTime(), d: +v, s: t.sampleId });
+    evs.push({ t: to(t).getTime(),   d: -v, s: t.sampleId });
   });
-  evs.sort((a,b) => a.t - b.t);
+  evs.sort((a, b) => a.t - b.t);
 
-  const state_cpu = {};
-  samples.forEach(s => state_cpu[s] = 0);
-  const times = [];
-  const byS = {};
-  samples.forEach(s => byS[s] = []);
-
+  const cur = {}, byS = {}, times = [];
+  samples.forEach(s => { cur[s] = 0; byS[s] = []; });
   let i = 0;
   while (i < evs.length) {
     const t = evs[i].t;
-    // Record BEFORE applying events at this timestamp (left edge of step)
-    times.push(new Date(t));
-    samples.forEach(s => byS[s].push(state_cpu[s]));
-    // Apply all events at this exact timestamp
-    while (i < evs.length && evs[i].t === t) {
-      state_cpu[evs[i].s] = (state_cpu[evs[i].s]||0) + evs[i].d;
-      i++;
-    }
-    // Record AFTER (right edge of step)
-    times.push(new Date(t));
-    samples.forEach(s => byS[s].push(state_cpu[s]));
+    times.push(new Date(t));                                   // left edge of the step
+    samples.forEach(s => byS[s].push(record(cur[s])));
+    while (i < evs.length && evs[i].t === t) { cur[evs[i].s] += evs[i].d; i++; }
+    times.push(new Date(t));                                   // right edge
+    samples.forEach(s => byS[s].push(record(cur[s])));
   }
-
   return { times, byS, samples };
+}
+
+// Highest running total of `value` over tasks' start→complete windows (events applied one by
+// one in time order). Used for the Peak CPUs card and per-sample peaks in Typical Sample.
+function peakConcurrent(tasks, value) {
+  const evs = tasks
+    .flatMap(t => [[t.start.getTime(), +value(t)], [t.complete.getTime(), -value(t)]])
+    .sort((a, b) => a[0] - b[0]);
+  let cur = 0, peak = 0;
+  evs.forEach(([, d]) => { cur += d; if (cur > peak) peak = cur; });
+  return peak;
+}
+
+function buildConcurrentData(tasks) {
+  const valid = tasks.filter(t => t.start && t.complete);
+  if (!valid.length) return null;
+  return stackedSteps(valid, t => t.start, t => t.complete, t => t.cpus);
 }
 
 function renderConcurrent() {
@@ -88,35 +97,9 @@ function renderActualCpu() {
     return;
   }
 
-  const samples = [...new Set(valid.map(t => t.sampleId))].sort();
-
-  // Each task contributes cpuPct/100 effective cores for its execution window.
-  const evs = [];
-  valid.forEach(t => {
-    const effectiveCores = t.cpuPct / 100;
-    evs.push({ t: t.start.getTime(),    d: +effectiveCores, s: t.sampleId });
-    evs.push({ t: t.complete.getTime(), d: -effectiveCores, s: t.sampleId });
-  });
-  evs.sort((a,b) => a.t - b.t);
-
-  const state_cpu = {};
-  samples.forEach(s => state_cpu[s] = 0);
-  const times = [];
-  const byS = {};
-  samples.forEach(s => byS[s] = []);
-
-  let i = 0;
-  while (i < evs.length) {
-    const t = evs[i].t;
-    times.push(new Date(t));
-    samples.forEach(s => byS[s].push(Math.max(0, state_cpu[s]))); // clamp negatives from float drift
-    while (i < evs.length && evs[i].t === t) {
-      state_cpu[evs[i].s] = (state_cpu[evs[i].s] || 0) + evs[i].d;
-      i++;
-    }
-    times.push(new Date(t));
-    samples.forEach(s => byS[s].push(Math.max(0, state_cpu[s])));
-  }
+  // Each task contributes cpuPct/100 effective cores; clamp negatives from float drift.
+  const { times, byS, samples } = stackedSteps(
+    valid, t => t.start, t => t.complete, t => t.cpuPct / 100, v => Math.max(0, v));
 
   const traces = samples.map(s => ({
     type: 'scatter', mode: 'lines', name: s,
@@ -143,39 +126,7 @@ function renderActualCpu() {
 function buildConcurrentMemData(tasks) {
   const valid = tasks.filter(t => t.start && t.complete && t.peakRss);
   if (!valid.length) return null;
-
-  const samples = [...new Set(valid.map(t => t.sampleId))].sort();
-
-  const evs = [];
-  valid.forEach(t => {
-    evs.push({ t: t.start.getTime(),    d: +t.peakRss,  s: t.sampleId });
-    evs.push({ t: t.complete.getTime(), d: -t.peakRss,  s: t.sampleId });
-  });
-  evs.sort((a,b) => a.t - b.t);
-
-  const state_mem = {};
-  samples.forEach(s => state_mem[s] = 0);
-  const times = [];
-  const byS = {};
-  samples.forEach(s => byS[s] = []);
-
-  let i = 0;
-  while (i < evs.length) {
-    const t = evs[i].t;
-    // Record BEFORE applying events at this timestamp (left edge of step)
-    times.push(new Date(t));
-    samples.forEach(s => byS[s].push(state_mem[s] / 1073741824)); // bytes → GB
-    // Apply all events at this exact timestamp
-    while (i < evs.length && evs[i].t === t) {
-      state_mem[evs[i].s] = (state_mem[evs[i].s] || 0) + evs[i].d;
-      i++;
-    }
-    // Record AFTER (right edge of step)
-    times.push(new Date(t));
-    samples.forEach(s => byS[s].push(state_mem[s] / 1073741824)); // bytes → GB
-  }
-
-  return { times, byS, samples };
+  return stackedSteps(valid, t => t.start, t => t.complete, t => t.peakRss, v => v / 1073741824); // bytes → GB
 }
 
 function renderMemory() {
@@ -223,32 +174,8 @@ function renderAllocMem() {
     return;
   }
 
-  const samples = [...new Set(valid.map(t => t.sampleId))].sort();
-  const evs = [];
-  valid.forEach(t => {
-    evs.push({ t: t.start.getTime(),    d: +t.allocMem, s: t.sampleId });
-    evs.push({ t: t.complete.getTime(), d: -t.allocMem, s: t.sampleId });
-  });
-  evs.sort((a,b) => a.t - b.t);
-
-  const state_mem = {};
-  samples.forEach(s => state_mem[s] = 0);
-  const times = [];
-  const byS = {};
-  samples.forEach(s => byS[s] = []);
-
-  let i = 0;
-  while (i < evs.length) {
-    const t = evs[i].t;
-    times.push(new Date(t));
-    samples.forEach(s => byS[s].push(state_mem[s] / 1073741824));
-    while (i < evs.length && evs[i].t === t) {
-      state_mem[evs[i].s] = (state_mem[evs[i].s] || 0) + evs[i].d;
-      i++;
-    }
-    times.push(new Date(t));
-    samples.forEach(s => byS[s].push(state_mem[s] / 1073741824));
-  }
+  const { times, byS, samples } = stackedSteps(
+    valid, t => t.start, t => t.complete, t => t.allocMem, v => v / 1073741824); // bytes → GB
 
   const traces = samples.map(s => ({
     type: 'scatter', mode: 'lines', name: s,

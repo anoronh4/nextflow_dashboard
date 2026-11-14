@@ -27,22 +27,13 @@ function computeSampleStats() {
       ? (Math.max(...completes.map(d => d.getTime())) - Math.min(...starts.map(d => d.getTime()))) / 3600000
       : null;
 
-    // Peak concurrent CPUs (event-driven, per-sample)
-    const evs = ts.filter(t => t.start && t.complete)
-      .flatMap(t => [[t.start.getTime(), +t.cpus], [t.complete.getTime(), -t.cpus]])
-      .sort((a,b) => a[0]-b[0]);
-    let cur = 0, peakCpu = 0;
-    evs.forEach(([,d]) => { cur += d; peakCpu = Math.max(peakCpu, cur); });
+    // Peak concurrent CPUs and allocated memory within this sample
+    const peakCpu = peakConcurrent(ts.filter(t => t.start && t.complete), t => t.cpus);
 
     // Peak RSS (max across tasks)
     const peakRssGB = Math.max(...ts.map(t => t.peakRss || 0)) / 1073741824;
 
-    // Peak concurrent allocated memory (event-driven, per-sample)
-    const memEvs = ts.filter(t => t.start && t.complete && t.allocMem)
-      .flatMap(t => [[t.start.getTime(), +t.allocMem], [t.complete.getTime(), -t.allocMem]])
-      .sort((a,b) => a[0]-b[0]);
-    let curMem = 0, peakAllocMem = 0;
-    memEvs.forEach(([,d]) => { curMem += d; peakAllocMem = Math.max(peakAllocMem, curMem); });
+    const peakAllocMem = peakConcurrent(ts.filter(t => t.start && t.complete && t.allocMem), t => t.allocMem);
     const peakAllocMemGB = peakAllocMem > 0 ? peakAllocMem / 1073741824 : null;
 
     // Total written bytes (both metrics)

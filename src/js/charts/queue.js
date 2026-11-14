@@ -15,31 +15,8 @@ function renderQueueWait() {
     Plotly.purge(concDiv);
     concDiv.innerHTML = '<div class="chart-empty">No tasks with submit/start timing for the selected filters</div>';
   } else {
-    const samples = [...new Set(valid.map(t => t.sampleId))].sort();
-    const evs = [];
-    valid.forEach(t => {
-      evs.push({ t: t.submit.getTime(), d: +1, s: t.sampleId });
-      evs.push({ t: t.start.getTime(),  d: -1, s: t.sampleId });
-    });
-    evs.sort((a,b) => a.t - b.t);
-
-    const cur = {};
-    samples.forEach(s => cur[s] = 0);
-    const times = [], byS = {};
-    samples.forEach(s => byS[s] = []);
-
-    let i = 0;
-    while (i < evs.length) {
-      const ts = evs[i].t;
-      times.push(new Date(ts));
-      samples.forEach(s => byS[s].push(cur[s]));
-      while (i < evs.length && evs[i].t === ts) {
-        cur[evs[i].s] = (cur[evs[i].s] || 0) + evs[i].d;
-        i++;
-      }
-      times.push(new Date(ts));
-      samples.forEach(s => byS[s].push(cur[s]));
-    }
+    // Pending = submitted but not started: +1 at submit, -1 at start.
+    const { times, byS, samples } = stackedSteps(valid, t => t.submit, t => t.start, () => 1);
 
     const traces = samples.map(s => ({
       type: 'scatter', mode: 'lines', name: s,
