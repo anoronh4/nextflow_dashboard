@@ -129,8 +129,6 @@ Create `src/js/charts/foo.js` with a `renderFoo()` that starts from `getTasks()`
 
 ### Known rough edges
 
-- `state.sortKey` / `state.sortDir` (`state.js`) are dead — the sample table actually uses the
-  module-level `sortKey` / `sortDir` in `charts/sample-table.js`.
 - `renderTypicalSample` caches its stats in `_cachedTypicalStats` (`charts/typical.js`); `sortTypical` and
   `downloadTypicalTSV` read that cache, so it is stale until the Typical Sample tab re-renders.
 - `getTasks` re-flattens and re-filters all runs on every render; fine for typical trace sizes,
