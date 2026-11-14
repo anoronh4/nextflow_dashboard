@@ -1,3 +1,7 @@
+// Filters. getTasks() is the single entry point for task data: it applies isRealSample, the
+// Processes filter (always), status/sample/run filters (unless ignored) and anonymization.
+// Uses: state (state.js), sampleLabel/runLabel (anonymize.js), updateAll (app.js).
+
 // ═══════════════════════════════════════════════
 // FILTERS
 // ═══════════════════════════════════════════════

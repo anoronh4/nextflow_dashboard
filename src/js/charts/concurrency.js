@@ -1,7 +1,9 @@
+// The four concurrent-usage tabs (allocated/actual CPU, peak/allocated memory) and the shared
+// event-sweep helpers stackedSteps / peakConcurrent, also used by queue.js, typical.js and app.js.
+
 // ═══════════════════════════════════════════════
-// CHART 1: CONCURRENT CPU (stacked area by sample)
+// EVENT SWEEPS (shared by the concurrency charts, Queue Wait, Typical Sample and the Peak CPUs card)
 // ═══════════════════════════════════════════════
-// ── Event sweeps ─────────────────────────────────────────────────────────
 // Every concurrency curve is the same trick: each task adds +value when it starts and -value
 // when it ends; sort those events by time and keep a running total.
 
@@ -32,8 +34,9 @@ function stackedSteps(tasks, from, to, value, record = v => v) {
   return { times, byS, samples };
 }
 
-// Highest running total of `value` over tasks' start→complete windows (events applied one by
-// one in time order). Used for the Peak CPUs card and per-sample peaks in Typical Sample.
+// Highest running total of `value` over tasks' start→complete windows. Tasks must have start and
+// complete. Events are applied one by one in time order (not grouped per timestamp like
+// stackedSteps); keep it that way, since the Peak CPUs card and Typical Sample peaks depend on it.
 function peakConcurrent(tasks, value) {
   const evs = tasks
     .flatMap(t => [[t.start.getTime(), +value(t)], [t.complete.getTime(), -value(t)]])
@@ -43,6 +46,9 @@ function peakConcurrent(tasks, value) {
   return peak;
 }
 
+// ═══════════════════════════════════════════════
+// CONCURRENT CPU, ALLOCATED (stacked area by sample)
+// ═══════════════════════════════════════════════
 function buildConcurrentData(tasks) {
   const valid = tasks.filter(t => t.start && t.complete);
   if (!valid.length) return null;
@@ -78,7 +84,7 @@ function renderConcurrent() {
 }
 
 // ═══════════════════════════════════════════════
-// CHART 2: CONCURRENT ACTUAL CPU (stacked area by sample)
+// CONCURRENT CPU, ACTUAL (stacked area by sample)
 // Uses %cpu (the real utilisation recorded by Nextflow) divided by 100 to give
 // effective cores. A task allocated 8 CPUs but running at 125% contributes 1.25
 // effective cores — not 8. Compare with the Allocated tab to find waste.
@@ -119,7 +125,7 @@ function renderActualCpu() {
 }
 
 // ═══════════════════════════════════════════════
-// CHART 3: CONCURRENT MEMORY (stacked area by sample)
+// CONCURRENT MEMORY, PEAK RSS (stacked area by sample)
 // Uses the same event-driven step-function approach as the CPU chart.
 // Each task contributes its peak_rss bytes for its entire start→complete window.
 // ═══════════════════════════════════════════════
@@ -158,7 +164,7 @@ function renderMemory() {
 }
 
 // ═══════════════════════════════════════════════
-// CHART 3: CONCURRENT ALLOCATED MEMORY (stacked area by sample)
+// CONCURRENT MEMORY, ALLOCATED (stacked area by sample)
 // Uses the `memory` column (pipeline-configured allocation ceiling),
 // not peak_rss (actual usage). Useful for seeing reserved cluster capacity.
 // ═══════════════════════════════════════════════
@@ -166,7 +172,7 @@ function renderAllocMem() {
   const div = document.getElementById('chart-allocmem');
   const tasks = getTasks();
 
-  // Reuse the same step-function builder, swapping peakRss → allocMem
+  // Same as Concurrent Memory (peak RSS) but summing the memory directive.
   const valid = tasks.filter(t => t.start && t.complete && t.allocMem);
   if (!valid.length) {
     Plotly.purge(div);

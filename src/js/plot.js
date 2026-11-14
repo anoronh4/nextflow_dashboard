@@ -1,3 +1,6 @@
+// Plotly helpers. Every chart draws with plot(div, traces, layout), which merges the shared dark
+// theme and attaches PLOT_CONFIG (the large-text dark/light PNG export buttons → exportPlot).
+
 // ═══════════════════════════════════════════════
 // PLOT HELPERS — shared layout/config + large-text PNG export
 // ═══════════════════════════════════════════════

@@ -1,5 +1,7 @@
+// Sample Breakdown tab: per-sample-per-run table; sortBy flips the module-level sortKey/sortDir.
+
 // ═══════════════════════════════════════════════
-// CHART 3: SAMPLE TABLE
+// SAMPLE BREAKDOWN TABLE
 // ═══════════════════════════════════════════════
 let sortKey = 'cpuHours', sortDir = -1;
 

@@ -1,3 +1,6 @@
+// Display formatting and small stats helpers. Renderers work in ms/bytes and format only at the
+// edge with fmtHours / fmtBytes.
+
 function fmtBytes(b) {
   if (!b) return '—';
   if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB';

@@ -544,6 +544,9 @@ code { color: var(--accent); background: rgba(88,166,255,0.08); padding: 1px 5px
 
 <!-- src/js/state.js -->
 <script>
+// Global mutable app state. Filter DOM controls are the source of truth for sample/run
+// selection (see getTasks in filters.js); this object holds everything else.
+
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
@@ -561,6 +564,10 @@ const state = {
 </script>
 <!-- src/js/parse.js -->
 <script>
+// Trace parsing. parseTrace turns one execution_trace.txt into flat task objects, resolving
+// columns by header name and normalising units at parse time: timestamps → Date,
+// durations → ms, memory → bytes, missing values ('-') → null.
+
 // ═══════════════════════════════════════════════
 // PARSING
 // ═══════════════════════════════════════════════
@@ -642,6 +649,9 @@ function parseTrace(text, runName, runId) {
 </script>
 <!-- src/js/format.js -->
 <script>
+// Display formatting and small stats helpers. Renderers work in ms/bytes and format only at the
+// edge with fmtHours / fmtBytes.
+
 function fmtBytes(b) {
   if (!b) return '—';
   if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB';
@@ -677,6 +687,10 @@ function arrQuantile(arr, q) {
 </script>
 <!-- src/js/colors.js -->
 <script>
+// Colours. DISTINCT_PALETTE is validated (see the comment on it); colour follows the entity:
+// samples by A→Z rank among loaded samples, processes by A→Z rank among checked processes.
+// Uses: state (state.js), allProcCounts (filters.js), aliasToSample (anonymize.js).
+
 // ═══════════════════════════════════════════════
 // PALETTE
 // ═══════════════════════════════════════════════
@@ -715,6 +729,9 @@ function sampleColor(s) {
 </script>
 <!-- src/js/plot.js -->
 <script>
+// Plotly helpers. Every chart draws with plot(div, traces, layout), which merges the shared dark
+// theme and attaches PLOT_CONFIG (the large-text dark/light PNG export buttons → exportPlot).
+
 // ═══════════════════════════════════════════════
 // PLOT HELPERS — shared layout/config + large-text PNG export
 // ═══════════════════════════════════════════════
@@ -826,6 +843,10 @@ function exportPlot(gd, theme) {
 </script>
 <!-- src/js/filters.js -->
 <script>
+// Filters. getTasks() is the single entry point for task data: it applies isRealSample, the
+// Processes filter (always), status/sample/run filters (unless ignored) and anonymization.
+// Uses: state (state.js), sampleLabel/runLabel (anonymize.js), updateAll (app.js).
+
 // ═══════════════════════════════════════════════
 // FILTERS
 // ═══════════════════════════════════════════════
@@ -934,6 +955,11 @@ function getTasks({ ignoreStatus=false, ignoreSample=false, ignoreRun=false }={}
 </script>
 <!-- src/js/anonymize.js -->
 <script>
+// Anonymize IDs. Aliases (Sample 001…, Run N) are applied at the end of getTasks and in the
+// labels. renderIdLabels also (re)builds the sample/run dropdowns and header run chips, since
+// it is what decides real vs alias labels. Filters keep using real IDs.
+// Uses: state, isRealSample (filters.js), updateAll (app.js).
+
 // ═══════════════════════════════════════════════
 // ANONYMIZATION
 // ═══════════════════════════════════════════════
@@ -987,10 +1013,12 @@ function toggleAnonymize() {
 </script>
 <!-- src/js/charts/concurrency.js -->
 <script>
+// The four concurrent-usage tabs (allocated/actual CPU, peak/allocated memory) and the shared
+// event-sweep helpers stackedSteps / peakConcurrent, also used by queue.js, typical.js and app.js.
+
 // ═══════════════════════════════════════════════
-// CHART 1: CONCURRENT CPU (stacked area by sample)
+// EVENT SWEEPS (shared by the concurrency charts, Queue Wait, Typical Sample and the Peak CPUs card)
 // ═══════════════════════════════════════════════
-// ── Event sweeps ─────────────────────────────────────────────────────────
 // Every concurrency curve is the same trick: each task adds +value when it starts and -value
 // when it ends; sort those events by time and keep a running total.
 
@@ -1021,8 +1049,9 @@ function stackedSteps(tasks, from, to, value, record = v => v) {
   return { times, byS, samples };
 }
 
-// Highest running total of `value` over tasks' start→complete windows (events applied one by
-// one in time order). Used for the Peak CPUs card and per-sample peaks in Typical Sample.
+// Highest running total of `value` over tasks' start→complete windows. Tasks must have start and
+// complete. Events are applied one by one in time order (not grouped per timestamp like
+// stackedSteps); keep it that way, since the Peak CPUs card and Typical Sample peaks depend on it.
 function peakConcurrent(tasks, value) {
   const evs = tasks
     .flatMap(t => [[t.start.getTime(), +value(t)], [t.complete.getTime(), -value(t)]])
@@ -1032,6 +1061,9 @@ function peakConcurrent(tasks, value) {
   return peak;
 }
 
+// ═══════════════════════════════════════════════
+// CONCURRENT CPU, ALLOCATED (stacked area by sample)
+// ═══════════════════════════════════════════════
 function buildConcurrentData(tasks) {
   const valid = tasks.filter(t => t.start && t.complete);
   if (!valid.length) return null;
@@ -1067,7 +1099,7 @@ function renderConcurrent() {
 }
 
 // ═══════════════════════════════════════════════
-// CHART 2: CONCURRENT ACTUAL CPU (stacked area by sample)
+// CONCURRENT CPU, ACTUAL (stacked area by sample)
 // Uses %cpu (the real utilisation recorded by Nextflow) divided by 100 to give
 // effective cores. A task allocated 8 CPUs but running at 125% contributes 1.25
 // effective cores — not 8. Compare with the Allocated tab to find waste.
@@ -1108,7 +1140,7 @@ function renderActualCpu() {
 }
 
 // ═══════════════════════════════════════════════
-// CHART 3: CONCURRENT MEMORY (stacked area by sample)
+// CONCURRENT MEMORY, PEAK RSS (stacked area by sample)
 // Uses the same event-driven step-function approach as the CPU chart.
 // Each task contributes its peak_rss bytes for its entire start→complete window.
 // ═══════════════════════════════════════════════
@@ -1147,7 +1179,7 @@ function renderMemory() {
 }
 
 // ═══════════════════════════════════════════════
-// CHART 3: CONCURRENT ALLOCATED MEMORY (stacked area by sample)
+// CONCURRENT MEMORY, ALLOCATED (stacked area by sample)
 // Uses the `memory` column (pipeline-configured allocation ceiling),
 // not peak_rss (actual usage). Useful for seeing reserved cluster capacity.
 // ═══════════════════════════════════════════════
@@ -1155,7 +1187,7 @@ function renderAllocMem() {
   const div = document.getElementById('chart-allocmem');
   const tasks = getTasks();
 
-  // Reuse the same step-function builder, swapping peakRss → allocMem
+  // Same as Concurrent Memory (peak RSS) but summing the memory directive.
   const valid = tasks.filter(t => t.start && t.complete && t.allocMem);
   if (!valid.length) {
     Plotly.purge(div);
@@ -1186,8 +1218,10 @@ function renderAllocMem() {
 </script>
 <!-- src/js/charts/timeline.js -->
 <script>
+// Job Timeline tab: one horizontal bar per task, y = sample, colour = process (processColor).
+
 // ═══════════════════════════════════════════════
-// CHART 4: GANTT (scatter lines, y=sample, color=process)
+// JOB TIMELINE / GANTT (scatter lines, y=sample, color=process)
 // Each task is a thick horizontal line segment from start → complete.
 // Using scatter (not bar) so Plotly handles datetime x-axis correctly —
 // bar charts treat x as bar *width* (a duration), causing date math bugs.
@@ -1292,8 +1326,10 @@ function renderGantt() {
 </script>
 <!-- src/js/charts/sample-table.js -->
 <script>
+// Sample Breakdown tab: per-sample-per-run table; sortBy flips the module-level sortKey/sortDir.
+
 // ═══════════════════════════════════════════════
-// CHART 3: SAMPLE TABLE
+// SAMPLE BREAKDOWN TABLE
 // ═══════════════════════════════════════════════
 let sortKey = 'cpuHours', sortDir = -1;
 
@@ -1368,8 +1404,10 @@ function renderTable() {
 </script>
 <!-- src/js/charts/durations.js -->
 <script>
+// Process Durations tab: realtime box plots per process (top 25), with order/colour toggles.
+
 // ═══════════════════════════════════════════════
-// CHART 4: PROCESS DURATION BOX PLOTS
+// PROCESS DURATIONS (box plots)
 // ═══════════════════════════════════════════════
 function setProcSort(order) {
   state.procSortOrder = order;
@@ -1442,8 +1480,11 @@ function renderProcess() {
 </script>
 <!-- src/js/charts/efficiency.js -->
 <script>
+// CPU and Memory Efficiency tabs: allocated (dim) vs actual (bright) per process, most
+// over-provisioned first, with per-task box plots underneath.
+
 // ═══════════════════════════════════════════════
-// CHART: CPU EFFICIENCY
+// CPU EFFICIENCY
 // Compares median allocated CPUs vs median actual CPUs used (%cpu/100) per process.
 // Sorted by utilisation ratio ascending (most over-provisioned at top).
 // ═══════════════════════════════════════════════
@@ -1550,7 +1591,7 @@ function renderCpuEff() {
 }
 
 // ═══════════════════════════════════════════════
-// CHART: MEMORY EFFICIENCY
+// MEMORY EFFICIENCY
 // Compares median allocated memory vs median peak RSS per process.
 // Sorted by utilisation ratio ascending (most over-provisioned at top).
 // ═══════════════════════════════════════════════
@@ -1664,8 +1705,12 @@ function renderMemEff() {
 </script>
 <!-- src/js/charts/typical.js -->
 <script>
+// Typical Sample tab: per-sample stats (computeSampleStats), median/quartile cards, the
+// CPU-hours vs written scatter, the table and TSV export. Stats are cached in
+// _cachedTypicalStats for sortTypical / downloadTypicalTSV.
+
 // ═══════════════════════════════════════════════
-// CHART 7: TYPICAL SAMPLE
+// TYPICAL SAMPLE
 // Computes per-sample stats on the fly and shows medians + distribution.
 // Groups by (runId, sampleId) so each run/sample combo is one data point.
 // ═══════════════════════════════════════════════
@@ -1695,11 +1740,11 @@ function computeSampleStats() {
 
     // Peak concurrent CPUs and allocated memory within this sample
     const peakCpu = peakConcurrent(ts.filter(t => t.start && t.complete), t => t.cpus);
+    const peakAllocMem = peakConcurrent(ts.filter(t => t.start && t.complete && t.allocMem), t => t.allocMem);
 
     // Peak RSS (max across tasks)
     const peakRssGB = Math.max(...ts.map(t => t.peakRss || 0)) / 1073741824;
 
-    const peakAllocMem = peakConcurrent(ts.filter(t => t.start && t.complete && t.allocMem), t => t.allocMem);
     const peakAllocMemGB = peakAllocMem > 0 ? peakAllocMem / 1073741824 : null;
 
     // Total written bytes (both metrics)
@@ -1928,8 +1973,10 @@ function renderTypicalSample() {
 </script>
 <!-- src/js/charts/queue.js -->
 <script>
+// Queue Wait tab: pending tasks over time (stackedSteps, submit → start) and wait per process.
+
 // ═══════════════════════════════════════════════
-// CHART: QUEUE WAIT
+// QUEUE WAIT
 // Shows (1) concurrent pending task count over time, stacked by sample
 //        (2) box-plot of queue wait time per process
 // ═══════════════════════════════════════════════
@@ -2026,6 +2073,9 @@ function renderQueueWait() {
 </script>
 <!-- src/js/app.js -->
 <script>
+// App wiring: file loading (handleFiles → onDataLoaded), tab routing (switchTab, updateAll,
+// renderActiveTab), metric cards, and all top-level event listeners. Loaded last.
+
 // ═══════════════════════════════════════════════
 // FILE LOADING
 // ═══════════════════════════════════════════════

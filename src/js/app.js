@@ -1,3 +1,6 @@
+// App wiring: file loading (handleFiles → onDataLoaded), tab routing (switchTab, updateAll,
+// renderActiveTab), metric cards, and all top-level event listeners. Loaded last.
+
 // ═══════════════════════════════════════════════
 // FILE LOADING
 // ═══════════════════════════════════════════════

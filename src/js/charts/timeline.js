@@ -1,5 +1,7 @@
+// Job Timeline tab: one horizontal bar per task, y = sample, colour = process (processColor).
+
 // ═══════════════════════════════════════════════
-// CHART 4: GANTT (scatter lines, y=sample, color=process)
+// JOB TIMELINE / GANTT (scatter lines, y=sample, color=process)
 // Each task is a thick horizontal line segment from start → complete.
 // Using scatter (not bar) so Plotly handles datetime x-axis correctly —
 // bar charts treat x as bar *width* (a duration), causing date math bugs.

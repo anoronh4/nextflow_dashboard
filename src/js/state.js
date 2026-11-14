@@ -1,3 +1,6 @@
+// Global mutable app state. Filter DOM controls are the source of truth for sample/run
+// selection (see getTasks in filters.js); this object holds everything else.
+
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════

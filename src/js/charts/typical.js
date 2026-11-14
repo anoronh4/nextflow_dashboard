@@ -1,5 +1,9 @@
+// Typical Sample tab: per-sample stats (computeSampleStats), median/quartile cards, the
+// CPU-hours vs written scatter, the table and TSV export. Stats are cached in
+// _cachedTypicalStats for sortTypical / downloadTypicalTSV.
+
 // ═══════════════════════════════════════════════
-// CHART 7: TYPICAL SAMPLE
+// TYPICAL SAMPLE
 // Computes per-sample stats on the fly and shows medians + distribution.
 // Groups by (runId, sampleId) so each run/sample combo is one data point.
 // ═══════════════════════════════════════════════
@@ -29,11 +33,11 @@ function computeSampleStats() {
 
     // Peak concurrent CPUs and allocated memory within this sample
     const peakCpu = peakConcurrent(ts.filter(t => t.start && t.complete), t => t.cpus);
+    const peakAllocMem = peakConcurrent(ts.filter(t => t.start && t.complete && t.allocMem), t => t.allocMem);
 
     // Peak RSS (max across tasks)
     const peakRssGB = Math.max(...ts.map(t => t.peakRss || 0)) / 1073741824;
 
-    const peakAllocMem = peakConcurrent(ts.filter(t => t.start && t.complete && t.allocMem), t => t.allocMem);
     const peakAllocMemGB = peakAllocMem > 0 ? peakAllocMem / 1073741824 : null;
 
     // Total written bytes (both metrics)

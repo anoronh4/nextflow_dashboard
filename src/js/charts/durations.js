@@ -1,5 +1,7 @@
+// Process Durations tab: realtime box plots per process (top 25), with order/colour toggles.
+
 // ═══════════════════════════════════════════════
-// CHART 4: PROCESS DURATION BOX PLOTS
+// PROCESS DURATIONS (box plots)
 // ═══════════════════════════════════════════════
 function setProcSort(order) {
   state.procSortOrder = order;

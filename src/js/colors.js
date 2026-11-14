@@ -1,3 +1,7 @@
+// Colours. DISTINCT_PALETTE is validated (see the comment on it); colour follows the entity:
+// samples by A→Z rank among loaded samples, processes by A→Z rank among checked processes.
+// Uses: state (state.js), allProcCounts (filters.js), aliasToSample (anonymize.js).
+
 // ═══════════════════════════════════════════════
 // PALETTE
 // ═══════════════════════════════════════════════

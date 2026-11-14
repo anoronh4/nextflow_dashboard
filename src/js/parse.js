@@ -1,3 +1,7 @@
+// Trace parsing. parseTrace turns one execution_trace.txt into flat task objects, resolving
+// columns by header name and normalising units at parse time: timestamps → Date,
+// durations → ms, memory → bytes, missing values ('-') → null.
+
 // ═══════════════════════════════════════════════
 // PARSING
 // ═══════════════════════════════════════════════

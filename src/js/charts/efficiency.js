@@ -1,5 +1,8 @@
+// CPU and Memory Efficiency tabs: allocated (dim) vs actual (bright) per process, most
+// over-provisioned first, with per-task box plots underneath.
+
 // ═══════════════════════════════════════════════
-// CHART: CPU EFFICIENCY
+// CPU EFFICIENCY
 // Compares median allocated CPUs vs median actual CPUs used (%cpu/100) per process.
 // Sorted by utilisation ratio ascending (most over-provisioned at top).
 // ═══════════════════════════════════════════════
@@ -106,7 +109,7 @@ function renderCpuEff() {
 }
 
 // ═══════════════════════════════════════════════
-// CHART: MEMORY EFFICIENCY
+// MEMORY EFFICIENCY
 // Compares median allocated memory vs median peak RSS per process.
 // Sorted by utilisation ratio ascending (most over-provisioned at top).
 // ═══════════════════════════════════════════════

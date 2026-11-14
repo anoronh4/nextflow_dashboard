@@ -1,5 +1,7 @@
+// Queue Wait tab: pending tasks over time (stackedSteps, submit → start) and wait per process.
+
 // ═══════════════════════════════════════════════
-// CHART: QUEUE WAIT
+// QUEUE WAIT
 // Shows (1) concurrent pending task count over time, stacked by sample
 //        (2) box-plot of queue wait time per process
 // ═══════════════════════════════════════════════
