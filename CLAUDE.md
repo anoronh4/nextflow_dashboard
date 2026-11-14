@@ -8,7 +8,9 @@ A single-file, fully offline dashboard that visualizes Nextflow / nf-core `execu
 files. The user drops one or more trace files onto the page; everything is parsed and charted
 client-side. There is no server, no build step, no package manager, no tests.
 
-Entire project: `pipeline_dashboard_offline.html` (~4 MB, 1935 lines) + this file + `README.md`.
+Entire project: `pipeline_dashboard_offline.html` (~4 MB) + this file + `README.md` + `examples/`
+(synthetic demo traces, their seeded generator, and the README images — regenerate the images
+from those traces after visible UI changes; see `examples/README.md`).
 
 ## Running it
 

@@ -809,7 +809,7 @@ function handleFiles(files) {
       // Try to extract run timestamp from path like "2026-01-25_14-56-25/execution_trace.txt"
       let runName = file.webkitRelativePath
         ? file.webkitRelativePath.split('/').slice(-2,-1)[0]
-        : file.name.replace('execution_trace','').replace('.txt','').trim() || `Run ${state.runs.length+1}`;
+        : file.name.replace('execution_trace','').replace('.txt','').replace(/^[\s._-]+|[\s._-]+$/g, '') || `Run ${state.runs.length+1}`;
       if (!runName) runName = `Run ${state.runs.length+1}`;
 
       const tasks = parseTrace(e.target.result, runName, runId);
@@ -1772,9 +1772,9 @@ function renderCpuEff() {
     barmode: 'overlay',
     xaxis: { title:'CPUs', zeroline:false },
     yaxis: { automargin:true },
-    legend: { x:0.99, xanchor:'right', y:0.01, yanchor:'bottom' },
+    legend: { orientation:'h', x:1, xanchor:'right', y:1.01, yanchor:'bottom' },  // above the plot: longest bars sit at the bottom
     hovermode: 'closest',
-    margin: { t:10, r:80, b:55, l:20 },
+    margin: { t:36, r:80, b:55, l:20 },
     height: chartH,
   });
 
@@ -1883,9 +1883,9 @@ function renderMemEff() {
     barmode: 'overlay',
     xaxis: { title:'Memory (GB)', zeroline:false },
     yaxis: { automargin:true },
-    legend: { x:0.99, xanchor:'right', y:0.01, yanchor:'bottom' },
+    legend: { orientation:'h', x:1, xanchor:'right', y:1.01, yanchor:'bottom' },  // above the plot: longest bars sit at the bottom
     hovermode: 'closest',
-    margin: { t:10, r:80, b:55, l:20 },
+    margin: { t:36, r:80, b:55, l:20 },
     height: chartH,
   });
 

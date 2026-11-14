@@ -8,11 +8,18 @@ and wall-clock time actually went — **broken down by sample**, and across **mu
 Everything runs in the browser. No install, no server, no upload, no network: open the HTML file
 and it works, including on an air-gapped machine or straight off a shared drive.
 
+![Dashboard overview: filters, summary metrics, and concurrent CPU usage stacked by sample](examples/images/overview.png)
+
+<sub>Screenshots use the synthetic demo traces in [`examples/`](examples/) — no real samples.</sub>
+
 ## Quick start
 
 1. Open `pipeline_dashboard_offline.html` in any modern browser (double-click it).
 2. Drag your `execution_trace.txt` files onto the drop zone — or click it and pick them.
 3. Each file becomes one **run**. Load several to compare runs side by side.
+
+To try it without your own data, load the two demo traces in [`examples/`](examples/) (a
+sarek-like somatic pipeline, 12 made-up samples, two runs a week apart — the second partly cached).
 
 Runs are labelled from the file's parent directory when you drop a folder (e.g.
 `2026-01-25_14-56-25/execution_trace.txt` → `2026-01-25_14-56-25`), otherwise from the filename.
@@ -106,6 +113,28 @@ resolution), each chart has two extra buttons:
 These re-draw the chart off-screen with about 1.6× larger text, thicker lines and bigger markers,
 add the chart's title, and save a 2× resolution PNG named after the title. The chart on the page is
 not changed.
+
+## Examples
+
+All made with the large-text export from the demo traces in [`examples/`](examples/).
+
+**Job Timeline** (dark) — one bar per task; the two long rows are samples whose `BWAMEM2_MEM` /
+`GATK4_MARKDUPLICATES` task failed and was retried.
+
+![Job timeline Gantt chart, one row per sample, colored by process](examples/images/job-timeline-dark.png)
+
+**CPU Efficiency** (dark) and **Memory Efficiency** (light) — allocated (dim) vs actually used
+(bright), most over-provisioned first. Here the single-threaded GATK steps are given 4–8 CPUs and
+use about one.
+
+![Allocated vs actual CPUs per process](examples/images/cpu-efficiency-dark.png)
+
+![Allocated vs peak RSS per process, light theme](examples/images/memory-efficiency-light.png)
+
+**Queue Wait** (light) — submit→start wait per process. `BWAMEM2_MEM` (24 CPUs per task) waits
+longest because it needs the biggest slots while the cluster is saturated.
+
+![Queue wait time distribution per process, light theme](examples/images/queue-wait-light.png)
 
 ## What the trace file needs to contain
 
